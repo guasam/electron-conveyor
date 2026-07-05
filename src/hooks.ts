@@ -18,6 +18,30 @@ interface Subscribable<P> {
 }
 
 /**
+ * The bound conveyor hooks. Explicitly named (rather than inferred) so consumers can re-export
+ * the hooks portably — an inferred return type would leak TanStack Query's internal types through
+ * this package's own nested copy and trip TS2742/TS2883.
+ */
+export interface ConveyorHooks<TRouter extends Router> {
+  useConveyorQuery<T>(
+    key: readonly unknown[],
+    selector: (client: ConveyorClient<TRouter>) => Promise<T>,
+    options?: QueryOpts<T>
+  ): UseQueryResult<T, Error>
+  useConveyorMutation<TData, TVars = void>(
+    mutator: (client: ConveyorClient<TRouter>, vars: TVars) => Promise<TData>,
+    options?: MutationOpts<TData, TVars>
+  ): UseMutationResult<TData, Error, TVars>
+  useConveyorEvent<P>(selector: (client: ConveyorClient<TRouter>) => Subscribable<P>, listener: (payload: P) => void): void
+}
+
+// Per-hook aliases so consumers can annotate re-exported hooks with a portable, named type
+// (avoids TS2742/TS2883 from expanding TanStack Query internals across the package boundary).
+export type ConveyorQueryHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorQuery']
+export type ConveyorMutationHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorMutation']
+export type ConveyorEventHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorEvent']
+
+/**
  * Bind the conveyor React hooks to a typed client instance. Returns fully-typed
  * `useConveyorQuery` / `useConveyorMutation` / `useConveyorEvent` — thin wrappers over
  * TanStack Query and a subscription effect.
@@ -26,7 +50,7 @@ interface Subscribable<P> {
  * export const conveyor = createConveyorClient<AppRouter>()
  * export const { useConveyorQuery, useConveyorMutation, useConveyorEvent } = createConveyorHooks(conveyor)
  */
-export function createConveyorHooks<TRouter extends Router>(client: ConveyorClient<TRouter>) {
+export function createConveyorHooks<TRouter extends Router>(client: ConveyorClient<TRouter>): ConveyorHooks<TRouter> {
   type Client = ConveyorClient<TRouter>
 
   /** Fetch data from a procedure with caching/loading/error via TanStack Query. */
