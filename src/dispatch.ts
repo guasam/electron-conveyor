@@ -25,7 +25,10 @@ export async function dispatchProcedure(
   if (proc.input) {
     const parsed = proc.input.safeParse(input)
     if (!parsed.success) {
-      return { ok: false, error: { code: 'INVALID_INPUT', message: `Invalid input for ${mod.id}.${method}`, issues: parsed.error.issues } }
+      return {
+        ok: false,
+        error: { code: 'INVALID_INPUT', message: `Invalid input for ${mod.id}.${method}`, issues: parsed.error.issues },
+      }
     }
     parsedInput = parsed.data
   }
@@ -41,7 +44,14 @@ export async function dispatchProcedure(
   if (validateOutput && proc.output) {
     const parsed = proc.output.safeParse(result)
     if (!parsed.success) {
-      return { ok: false, error: { code: 'INVALID_OUTPUT', message: `Invalid output for ${mod.id}.${method}`, issues: parsed.error.issues } }
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID_OUTPUT',
+          message: `Invalid output for ${mod.id}.${method}`,
+          issues: parsed.error.issues,
+        },
+      }
     }
     return { ok: true, data: parsed.data }
   }

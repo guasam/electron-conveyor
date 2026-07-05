@@ -32,7 +32,10 @@ export interface ConveyorHooks<TRouter extends Router> {
     mutator: (client: ConveyorClient<TRouter>, vars: TVars) => Promise<TData>,
     options?: MutationOpts<TData, TVars>
   ): UseMutationResult<TData, Error, TVars>
-  useConveyorEvent<P>(selector: (client: ConveyorClient<TRouter>) => Subscribable<P>, listener: (payload: P) => void): void
+  useConveyorEvent<P>(
+    selector: (client: ConveyorClient<TRouter>) => Subscribable<P>,
+    listener: (payload: P) => void
+  ): void
 }
 
 // Per-hook aliases so consumers can annotate re-exported hooks with a portable, named type

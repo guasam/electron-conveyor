@@ -13,27 +13,53 @@
   ],
   "exports": {
     "./define": {
-      "import": { "types": "./dist/define.d.ts", "default": "./dist/define.js" },
-      "require": { "types": "./dist/define.d.cts", "default": "./dist/define.cjs" }
+      "import": {
+        "types": "./dist/define.d.ts",
+        "default": "./dist/define.js"
+      },
+      "require": {
+        "types": "./dist/define.d.cts",
+        "default": "./dist/define.cjs"
+      }
     },
     "./main": {
-      "import": { "types": "./dist/main.d.ts", "default": "./dist/main.js" },
-      "require": { "types": "./dist/main.d.cts", "default": "./dist/main.cjs" }
+      "import": {
+        "types": "./dist/main.d.ts",
+        "default": "./dist/main.js"
+      },
+      "require": {
+        "types": "./dist/main.d.cts",
+        "default": "./dist/main.cjs"
+      }
     },
     "./renderer": {
-      "import": { "types": "./dist/renderer.d.ts", "default": "./dist/renderer.js" },
-      "require": { "types": "./dist/renderer.d.cts", "default": "./dist/renderer.cjs" }
+      "import": {
+        "types": "./dist/renderer.d.ts",
+        "default": "./dist/renderer.js"
+      },
+      "require": {
+        "types": "./dist/renderer.d.cts",
+        "default": "./dist/renderer.cjs"
+      }
     },
     "./preload": {
-      "import": { "types": "./dist/preload.d.ts", "default": "./dist/preload.js" },
-      "require": { "types": "./dist/preload.d.cts", "default": "./dist/preload.cjs" }
+      "import": {
+        "types": "./dist/preload.d.ts",
+        "default": "./dist/preload.js"
+      },
+      "require": {
+        "types": "./dist/preload.d.cts",
+        "default": "./dist/preload.cjs"
+      }
     }
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write --list-different .",
+    "format:check": "prettier --check ."
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5",
@@ -58,6 +84,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.17",
     "electron": "^43.0.0",
+    "prettier": "^3.9.4",
     "react": "^19.2.7",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",

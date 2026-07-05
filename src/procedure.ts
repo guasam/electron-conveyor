@@ -27,9 +27,7 @@ class ProcedureBuilder<TInput = void> {
   }
 
   /** Attach the implementation. The return type becomes the client's awaited result type. */
-  handle<TResult>(
-    resolver: (opts: { input: TInput; ctx: HandlerContext }) => TResult
-  ): ProcedureDef<TInput, TResult> {
+  handle<TResult>(resolver: (opts: { input: TInput; ctx: HandlerContext }) => TResult): ProcedureDef<TInput, TResult> {
     return {
       kind: 'procedure',
       input: this._input,
