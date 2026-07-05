@@ -1,0 +1,68 @@
+{
+  "name": "electron-conveyor",
+  "version": "0.1.0",
+  "description": "Type-safe IPC and cross-window state for Electron — single source of truth per feature, end-to-end inference.",
+  "license": "MIT",
+  "author": {
+    "name": "Guasam",
+    "url": "https://github.com/guasam"
+  },
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./define": {
+      "import": { "types": "./dist/define.d.ts", "default": "./dist/define.js" },
+      "require": { "types": "./dist/define.d.cts", "default": "./dist/define.cjs" }
+    },
+    "./main": {
+      "import": { "types": "./dist/main.d.ts", "default": "./dist/main.js" },
+      "require": { "types": "./dist/main.d.cts", "default": "./dist/main.cjs" }
+    },
+    "./renderer": {
+      "import": { "types": "./dist/renderer.d.ts", "default": "./dist/renderer.js" },
+      "require": { "types": "./dist/renderer.d.cts", "default": "./dist/renderer.cjs" }
+    },
+    "./preload": {
+      "import": { "types": "./dist/preload.d.ts", "default": "./dist/preload.js" },
+      "require": { "types": "./dist/preload.d.cts", "default": "./dist/preload.cjs" }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5",
+    "electron": ">=30",
+    "react": ">=18",
+    "zod": "^4",
+    "zustand": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "zustand": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.101.2",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.17",
+    "electron": "^43.0.0",
+    "react": "^19.2.7",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  }
+}
