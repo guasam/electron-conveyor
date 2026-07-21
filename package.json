@@ -59,7 +59,10 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write --list-different .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5",
@@ -88,6 +91,7 @@
     "react": "^19.2.7",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
+    "vitepress": "^1.6.3",
     "vitest": "^4.1.9",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
