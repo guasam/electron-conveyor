@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { useStore } from 'zustand'
-import type { ConveyorStore, StoreActions, StoreActionsClient, StoreDef } from './store'
+import type { ConveyorStore, StoreActions, StoreActionsClient, StoreDef } from '../authoring/store'
 
 // One mirror + one bound-action map per store id, shared by all components in this window.
 const mirrors = new Map<string, StoreApi<object>>()
@@ -13,7 +13,7 @@ function getMirror(def: StoreDef<string, object, StoreActions<object>>): StoreAp
   const channel = `conveyor:store:${def.id}`
   const store = createStore<object>(() => structuredClone(def.initialState))
 
-  // Hydrate from the source of truth, then stay in sync via broadcast patches.
+  // Hydrate from the source of truth, then stay in sync via broadcasts.
   window.conveyor.invoke(channel, '__get__').then((s) => store.setState(s as object, true))
   window.conveyor.subscribe(`${channel}:changed`, (s) => store.setState(s as object, true))
 
@@ -37,16 +37,9 @@ function getActions(def: StoreDef<string, object, StoreActions<object>>) {
 type AnyStoreDef = StoreDef<string, object, StoreActions<object>>
 
 /**
- * Subscribe to a cross-window store. Source of truth lives in main; every window stays in
- * sync automatically.
- *
- * - Without a selector → live state merged with bound actions (convenient; re-renders on any change).
- * - With a selector → just that slice (re-renders only when the slice changes — the ergonomic default for real UIs).
- *
- * @example
- * const counter = useConveyorStore(counterStore)          // { count, updatedBy, increment, ... }
- * const count   = useConveyorStore(counterStore, s => s.count)   // number, re-renders only on count
- * const { increment } = useConveyorActions(counterStore)         // stable, never causes re-render
+ * Subscribe to a cross-window store (source of truth in main, every window kept in sync).
+ * With a selector → just that slice (re-renders only when it changes — the default for real UIs).
+ * Without → live state merged with bound actions (re-renders on any change).
  */
 export function useConveyorStore<TId extends string, S extends object, A extends StoreActions<S>>(
   def: StoreDef<TId, S, A>

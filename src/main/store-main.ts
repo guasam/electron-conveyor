@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import type { StoreActions, StoreDef } from './store'
+import type { StoreActions, StoreDef } from '../authoring/store'
 
 type DropFirst<T extends unknown[]> = T extends [unknown, ...infer R] ? R : never
 
@@ -9,9 +9,8 @@ export interface StoreHandle<S, A extends StoreActions<S>> {
 }
 
 /**
- * Register a store on the main process as the single source of truth. Holds the state,
- * runs actions, and broadcasts every change to all windows. Returns a main-side handle so
- * main code can read/dispatch too.
+ * Register a store on main as the single source of truth: holds state, runs actions, and broadcasts
+ * every change to all windows. Returns a handle so main code can read/dispatch too.
  */
 export function registerStore<TId extends string, S, A extends StoreActions<S>>(
   def: StoreDef<TId, S, A>

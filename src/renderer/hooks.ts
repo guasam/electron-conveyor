@@ -7,20 +7,19 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
-import type { ConveyorClient, Router, Unsubscribe } from './types'
+import type { ConveyorClient, Router, Unsubscribe } from '../core/types'
 
 type QueryOpts<T> = Omit<UseQueryOptions<T, Error>, 'queryKey' | 'queryFn'>
 type MutationOpts<TData, TVars> = Omit<UseMutationOptions<TData, Error, TVars>, 'mutationFn'>
 
-/** Anything the client exposes as a subscribable event member. */
 interface Subscribable<P> {
   subscribe: (listener: (payload: P) => void) => Unsubscribe
 }
 
 /**
- * The bound conveyor hooks. Explicitly named (rather than inferred) so consumers can re-export
- * the hooks portably — an inferred return type would leak TanStack Query's internal types through
- * this package's own nested copy and trip TS2742/TS2883.
+ * The bound conveyor hooks, declared explicitly (not inferred) so consumers can re-export them
+ * portably — an inferred return would leak TanStack Query's internal types across the package
+ * boundary and trip TS2742/TS2883.
  */
 export interface ConveyorHooks<TRouter extends Router> {
   useConveyorQuery<T>(
@@ -38,16 +37,14 @@ export interface ConveyorHooks<TRouter extends Router> {
   ): void
 }
 
-// Per-hook aliases so consumers can annotate re-exported hooks with a portable, named type
-// (avoids TS2742/TS2883 from expanding TanStack Query internals across the package boundary).
+// Per-hook aliases so consumers can annotate re-exported hooks with a portable, named type.
 export type ConveyorQueryHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorQuery']
 export type ConveyorMutationHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorMutation']
 export type ConveyorEventHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorEvent']
 
 /**
- * Bind the conveyor React hooks to a typed client instance. Returns fully-typed
- * `useConveyorQuery` / `useConveyorMutation` / `useConveyorEvent` — thin wrappers over
- * TanStack Query and a subscription effect.
+ * Bind the conveyor React hooks to a typed client — thin wrappers over TanStack Query and a
+ * subscription effect.
  *
  * @example
  * export const conveyor = createConveyorClient<AppRouter>()
@@ -56,7 +53,7 @@ export type ConveyorEventHook<TRouter extends Router> = ConveyorHooks<TRouter>['
 export function createConveyorHooks<TRouter extends Router>(client: ConveyorClient<TRouter>): ConveyorHooks<TRouter> {
   type Client = ConveyorClient<TRouter>
 
-  /** Fetch data from a procedure with caching/loading/error via TanStack Query. */
+  /** Fetch from a procedure with caching/loading/error via TanStack Query. */
   function useConveyorQuery<T>(
     key: readonly unknown[],
     selector: (c: Client) => Promise<T>,
@@ -70,7 +67,7 @@ export function createConveyorHooks<TRouter extends Router>(client: ConveyorClie
     })
   }
 
-  /** Run a procedure as a mutation (invalidate/refetch queries in `onSuccess`, etc.). */
+  /** Run a procedure as a mutation (invalidate/refetch in `onSuccess`, etc.). */
   function useConveyorMutation<TData, TVars = void>(
     mutator: (c: Client, vars: TVars) => Promise<TData>,
     options?: MutationOpts<TData, TVars>
@@ -81,16 +78,15 @@ export function createConveyorHooks<TRouter extends Router>(client: ConveyorClie
     })
   }
 
-  /** Subscribe to a main→renderer push event for the lifetime of the component. */
+  /** Subscribe to a main→renderer push event for the component's lifetime. */
   function useConveyorEvent<P>(selector: (c: Client) => Subscribable<P>, listener: (payload: P) => void): void {
     const listenerRef = useRef(listener)
     listenerRef.current = listener
 
     useEffect(() => {
+      // Event target is stable across renders — subscribe once; the ref keeps the listener current.
       const unsubscribe = selector(client).subscribe((payload) => listenerRef.current(payload))
       return unsubscribe
-      // The event target is stable across renders; re-subscribing per render is neither
-      // wanted nor safe, so we intentionally run this once.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   }

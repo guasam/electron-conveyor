@@ -1,9 +1,9 @@
 /**
  * Conveyor Store — main-owned reactive state that auto-syncs across every window.
  *
- * The store definition is PURE (no electron, no react) so it is safely shared by both
- * processes: main registers it as the source of truth; each renderer mirrors it. Actions
- * are pure state reducers (mutate the draft) — side effects belong in procedures, not here.
+ * The definition is PURE (no electron, no react) so both processes share it: main registers it as
+ * the source of truth; each renderer mirrors it. Actions are pure reducers (mutate the draft) —
+ * side effects belong in procedures, not here.
  */
 
 export type StoreActions<S> = Record<string, (state: S, ...args: never[]) => void>

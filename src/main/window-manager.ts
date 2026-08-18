@@ -1,9 +1,6 @@
 import type { BrowserWindow, WebContents } from 'electron'
 
-/**
- * Where an event is emitted. Either a single window, or a resolver returning the current set of
- * target windows (so `broadcast` / `to(label)` / `except(sender)` stay live as windows come and go).
- */
+/** A single window, or a resolver for the current set — so `broadcast`/`to`/`except` stay live. */
 export type EmitTarget = BrowserWindow | (() => BrowserWindow[])
 
 /** Normalize a target to the live, non-destroyed windows to send to. Pure — no electron runtime. */
@@ -19,11 +16,11 @@ export interface ConveyorWindowManager {
   get(label: string): BrowserWindow | undefined
   all(): BrowserWindow[]
   labels(): string[]
-  /** Target resolver for the window at `label` (empty if gone). */
+  /** Resolver for the window at `label` (empty if gone). */
   to(label: string): () => BrowserWindow[]
-  /** Target resolver for every tracked, live window. */
+  /** Resolver for every tracked, live window. */
   broadcast(): BrowserWindow[]
-  /** Target resolver for all tracked windows except the one owning `sender`. */
+  /** Resolver for all tracked windows except the one owning `sender`. */
   except(sender: WebContents): () => BrowserWindow[]
 }
 

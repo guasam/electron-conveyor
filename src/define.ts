@@ -1,22 +1,34 @@
 /**
- * Authoring primitives — pure, no electron/react/zustand runtime. Safe to import in ANY
- * process. This is what you use to *define* IPC surface (modules, procedures, events, stores).
+ * Authoring primitives — pure, no electron/react/zustand runtime, importable in ANY process.
+ * Use these to *define* IPC surface (modules, procedures, events, stores).
  *
- *   import { defineModule, procedure, event, defineStore } from 'electron-conveyor/define'
+ *   import { defineModule, procedure, event, defineStore } from 'electron-conveyor/define'  // zero-context
+ *   import { initConveyor } from 'electron-conveyor/define'                                 // typed context
  */
-export { defineModule } from './module'
-export { procedure } from './procedure'
-export { event } from './event'
-export { defineStore } from './store'
+export { initConveyor } from './authoring/init'
+export type { ConveyorApi } from './authoring/init'
+export { defineModule } from './authoring/module'
+export { procedure } from './authoring/procedure'
+export type { ProcedureBuilder } from './authoring/procedure'
+export { event } from './authoring/event'
+export { defineStore } from './authoring/store'
 
+export type { StandardSchemaV1 } from './core/standard-schema'
 export type {
+  BaseContext,
   HandlerContext,
+  Middleware,
+  MwMarker,
+  NextFn,
+  AnyMiddleware,
   ProcedureDef,
   EventDef,
+  AnyDef,
   Module,
+  ModuleRecord,
   Router,
   ConveyorClient,
   EventEmitters,
   Unsubscribe,
-} from './types'
-export type { StoreDef, StoreActions, StoreActionsClient, ConveyorStore } from './store'
+} from './core/types'
+export type { StoreDef, StoreActions, StoreActionsClient, ConveyorStore } from './authoring/store'

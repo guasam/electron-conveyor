@@ -1,9 +1,8 @@
 import type { ConveyorErrorCode, ConveyorErrorPayload } from './types'
 
 /**
- * Thrown in the renderer when a procedure fails in main. Carries the real message plus a
- * stable `code` and (for validation failures) the Zod `issues` — so callers can branch on
- * `err.code` and surface field-level detail instead of parsing a string.
+ * Thrown in the renderer when a procedure fails in main. Carries the real message, a stable `code`,
+ * and (for validation failures) the Standard Schema `issues` — so callers can branch on `err.code`.
  */
 export class ConveyorError extends Error {
   readonly code: ConveyorErrorCode

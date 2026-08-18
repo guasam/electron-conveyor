@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { defineModule } from './module'
-import { procedure } from './procedure'
-import { event } from './event'
+import { defineModule } from '../authoring/module'
+import { procedure } from '../authoring/procedure'
+import { event } from '../authoring/event'
 import { dispatchProcedure } from './dispatch'
 import type { HandlerContext } from './types'
 

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createConveyorClient } from './client'
-import { ConveyorError } from './errors'
+import { ConveyorError } from '../core/errors'
 import type { ConveyorBridge } from './client'
-import type { Router } from './types'
+import type { Router } from '../core/types'
 
 // Minimal router shape for typing; the client is a Proxy and carries no runtime metadata.
 type TestRouter = Router

@@ -1,5 +1,5 @@
-import { ConveyorError } from './errors'
-import type { ConveyorClient, ConveyorResult, Router, Unsubscribe } from './types'
+import { ConveyorError } from '../core/errors'
+import type { ConveyorClient, ConveyorResult, Router, Unsubscribe } from '../core/types'
 
 /** The minimal, Zod-free surface the preload exposes across the context bridge. */
 export interface ConveyorBridge {
@@ -14,12 +14,9 @@ declare global {
 }
 
 /**
- * Build the typed renderer client. Purely a Proxy over `window.conveyor` — it carries no
- * runtime metadata about methods, so the router (Zod + handlers) stays 100% in main. Every
- * member is a callable that also has `.subscribe`; the inferred type exposes only the correct
- * shape per member (procedure → callable, event → `{ subscribe }`).
- *
- * @example const conveyor = createConveyorClient<AppRouter>()
+ * Build the typed renderer client — a Proxy over `window.conveyor` carrying no runtime method
+ * metadata, so the router (Zod + handlers) stays 100% in main. Each member is a callable that also
+ * has `.subscribe`; the inferred type exposes only the correct shape per member.
  */
 export function createConveyorClient<TRouter extends Router>(): ConveyorClient<TRouter> {
   const bridge = window.conveyor

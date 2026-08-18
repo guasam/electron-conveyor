@@ -78,6 +78,9 @@
     "react": {
       "optional": true
     },
+    "zod": {
+      "optional": true
+    },
     "zustand": {
       "optional": true
     }
