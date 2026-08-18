@@ -1,16 +1,14 @@
-import { ipcMain, BrowserWindow, type WebContents } from 'electron'
+import { ipcMain } from 'electron'
+import { channels, STREAM_START, STREAM_CANCEL } from '../core/channels'
 import { resolveStream } from '../core/dispatch'
+import { errorMessage } from '../core/errors'
 import { validateSchema } from '../core/standard-schema'
 import type { AnyModule, BaseContext, StreamMessage, StreamStartRequest } from '../core/types'
+import { buildContext } from './context'
 import { isDev } from './env'
-
-const START = 'conveyor:stream:start'
-const CANCEL = 'conveyor:stream:cancel'
 
 // Active streams by id, so `cancel` can abort the matching generator.
 const active = new Map<string, AbortController>()
-
-const errMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /**
  * Register the two global stream handlers. Called once by `createRouter` with a by-id module lookup
@@ -21,12 +19,12 @@ export function registerStreamHandlers(
   byId: Map<string, AnyModule>,
   createContext?: (base: BaseContext) => unknown
 ): void {
-  ipcMain.removeHandler(START)
-  ipcMain.removeHandler(CANCEL)
+  ipcMain.removeHandler(STREAM_START)
+  ipcMain.removeHandler(STREAM_CANCEL)
 
-  ipcMain.handle(START, async (event, _streamId: string, req: StreamStartRequest) => {
+  ipcMain.handle(STREAM_START, async (event, _streamId: string, req: StreamStartRequest) => {
     const sender = event.sender
-    const channel = `conveyor:stream:${req.streamId}`
+    const channel = channels.stream(req.streamId)
     const send = (msg: StreamMessage) => {
       if (!sender.isDestroyed()) sender.send(channel, msg)
     }
@@ -40,14 +38,8 @@ export function registerStreamHandlers(
     const controller = new AbortController()
     active.set(req.streamId, controller)
 
-    const base: BaseContext = {
-      event,
-      sender,
-      window: BrowserWindow.fromWebContents(sender),
-    }
-    const ctx = createContext ? { ...base, ...((await createContext(base)) as object) } : base
-
-    const setup = await resolveStream(mod, req.method, req.input, ctx as BaseContext, controller.signal)
+    const ctx = await buildContext(event, createContext)
+    const setup = await resolveStream(mod, req.method, req.input, ctx, controller.signal)
     if (!setup.ok) {
       active.delete(req.streamId)
       send({ type: 'error', error: setup.error })
@@ -58,7 +50,7 @@ export function registerStreamHandlers(
     void pump(req.streamId, setup.stream, setup.output, controller, send)
   })
 
-  ipcMain.handle(CANCEL, (_event, streamId: string) => {
+  ipcMain.handle(STREAM_CANCEL, (_event, streamId: string) => {
     const controller = active.get(streamId)
     if (controller) {
       controller.abort()
@@ -89,7 +81,7 @@ async function pump(
     }
     if (!signal.aborted) send({ type: 'end' })
   } catch (err) {
-    if (!signal.aborted) send({ type: 'error', error: { code: 'HANDLER_ERROR', message: errMessage(err) } })
+    if (!signal.aborted) send({ type: 'error', error: { code: 'HANDLER_ERROR', message: errorMessage(err) } })
   } finally {
     active.delete(streamId)
   }

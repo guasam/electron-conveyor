@@ -1,7 +1,20 @@
-import { validateSchema } from './standard-schema'
+import { validateSchema, type StandardSchemaV1 } from './standard-schema'
+import { errorMessage } from './errors'
 import type { AnyModule, BaseContext, ConveyorErrorPayload, ConveyorResult, ProcedureDef, StreamDef } from './types'
 
-const message = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+/** Validate a call's single input against its schema (the trust boundary). Shared by both paths. */
+async function validateInput(
+  schema: StandardSchemaV1 | undefined,
+  input: unknown,
+  path: string
+): Promise<{ ok: true; value: unknown } | { ok: false; error: ConveyorErrorPayload }> {
+  if (!schema) return { ok: true, value: input }
+  const parsed = await validateSchema(schema, input)
+  if (parsed.issues) {
+    return { ok: false, error: { code: 'INVALID_INPUT', message: `Invalid input for ${path}`, issues: parsed.issues } }
+  }
+  return { ok: true, value: parsed.value }
+}
 
 /**
  * Run the middleware chain around the handler (onion model): each step may guard (throw), wrap
@@ -53,22 +66,14 @@ export async function dispatchProcedure(
   const path = `${mod.id}.${method}`
 
   // Input is the trust boundary — always validated.
-  let parsedInput: unknown = input
-  if (proc.input) {
-    const parsed = await validateSchema(proc.input, input)
-    if (parsed.issues) {
-      return { ok: false, error: { code: 'INVALID_INPUT', message: `Invalid input for ${path}`, issues: parsed.issues } }
-    }
-    parsedInput = parsed.value
-  }
+  const inp = await validateInput(proc.input, input, path)
+  if (!inp.ok) return inp
 
   let result: unknown
   try {
-    result = await runChain(proc.middlewares, ctx, path, (finalCtx) =>
-      proc.resolver({ input: parsedInput, ctx: finalCtx })
-    )
+    result = await runChain(proc.middlewares, ctx, path, (finalCtx) => proc.resolver({ input: inp.value, ctx: finalCtx }))
   } catch (err) {
-    return { ok: false, error: { code: 'HANDLER_ERROR', message: `${path}: ${message(err)}` } }
+    return { ok: false, error: { code: 'HANDLER_ERROR', message: `${path}: ${errorMessage(err)}` } }
   }
 
   // Output is trusted (from main) — validated in dev only.
@@ -105,21 +110,15 @@ export async function resolveStream(
   const s = def as StreamDef
   const path = `${mod.id}.${method}`
 
-  let parsedInput: unknown = input
-  if (s.input) {
-    const parsed = await validateSchema(s.input, input)
-    if (parsed.issues) {
-      return { ok: false, error: { code: 'INVALID_INPUT', message: `Invalid input for ${path}`, issues: parsed.issues } }
-    }
-    parsedInput = parsed.value
-  }
+  const inp = await validateInput(s.input, input, path)
+  if (!inp.ok) return inp
 
   try {
     const stream = (await runChain(s.middlewares, ctx, path, (finalCtx) =>
-      s.resolver({ input: parsedInput, ctx: finalCtx, signal })
+      s.resolver({ input: inp.value, ctx: finalCtx, signal })
     )) as AsyncIterable<unknown>
     return { ok: true, stream, output: s.output }
   } catch (err) {
-    return { ok: false, error: { code: 'HANDLER_ERROR', message: `${path}: ${message(err)}` } }
+    return { ok: false, error: { code: 'HANDLER_ERROR', message: `${path}: ${errorMessage(err)}` } }
   }
 }

@@ -1,3 +1,4 @@
+import { channels, STREAM_START, STREAM_CANCEL } from '../core/channels'
 import { ConveyorError } from '../core/errors'
 import type { ConveyorClient, ConveyorResult, Router, StreamMessage, Unsubscribe } from '../core/types'
 
@@ -21,7 +22,7 @@ let streamSeq = 0
  * this lets the metadata-free Proxy serve both without a per-method registry or a preload change.
  */
 function makeCall(bridge: ConveyorBridge, moduleId: string, method: string, args: unknown[]): unknown {
-  const channel = `conveyor:${moduleId}`
+  const channel = channels.procedure(moduleId)
 
   // Procedure path — lazy single invoke, unwrapping the { ok } envelope.
   let promise: Promise<unknown> | undefined
@@ -51,7 +52,7 @@ function streamIterator(
   args: unknown[]
 ): AsyncIterator<unknown> {
   const streamId = `${moduleId}.${method}#${++streamSeq}`
-  const channel = `conveyor:stream:${streamId}`
+  const channel = channels.stream(streamId)
 
   type Ev = { k: 'value'; v: unknown } | { k: 'error'; e: unknown } | { k: 'done' }
   const queue: Ev[] = []
@@ -81,13 +82,13 @@ function streamIterator(
     }
   })
 
-  bridge.invoke('conveyor:stream:start', streamId, { module: moduleId, method, streamId, input: args[0] })
+  bridge.invoke(STREAM_START, streamId, { module: moduleId, method, streamId, input: args[0] })
 
   const cancel = () => {
     if (finished) return
     finished = true
     unsub()
-    bridge.invoke('conveyor:stream:cancel', streamId)
+    bridge.invoke(STREAM_CANCEL, streamId)
   }
 
   return {
@@ -139,7 +140,7 @@ export function createConveyorClient<TRouter extends Router>(): ConveyorClient<T
 
             const member = (...args: unknown[]) => makeCall(bridge, moduleId, method, args)
             member.subscribe = (listener: (payload: unknown) => void): Unsubscribe =>
-              bridge.subscribe(`conveyor:event:${moduleId}:${method}`, listener)
+              bridge.subscribe(channels.event(moduleId, method), listener)
 
             methodCache.set(method, member)
             return member

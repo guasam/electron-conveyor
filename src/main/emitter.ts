@@ -1,3 +1,4 @@
+import { channels } from '../core/channels'
 import { validateSchema } from '../core/standard-schema'
 import { resolveTargets, type EmitTarget } from './window-manager'
 import type { AnyModule, EventEmitters } from '../core/types'
@@ -14,7 +15,7 @@ export function createEmitter<TModule extends AnyModule>(mod: TModule, target: E
   for (const key of Object.keys(mod.record)) {
     const def = mod.record[key]
     if (def.kind !== 'event') continue
-    const channel = `conveyor:event:${mod.id}:${key}`
+    const channel = channels.event(mod.id, key)
 
     emitters[key] = (payload: unknown) => {
       // Dev-only correctness check; non-blocking so emit stays fire-and-forget.

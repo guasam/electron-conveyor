@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { channels, STORE_GET } from '../core/channels'
 import type { StoreActions, StoreDef } from '../authoring/store'
 
 type DropFirst<T extends unknown[]> = T extends [unknown, ...infer R] ? R : never
@@ -15,13 +16,14 @@ export interface StoreHandle<S, A extends StoreActions<S>> {
 export function registerStore<TId extends string, S, A extends StoreActions<S>>(
   def: StoreDef<TId, S, A>
 ): StoreHandle<S, A> {
-  const channel = `conveyor:store:${def.id}`
+  const channel = channels.store(def.id)
+  const changed = channels.storeChanged(def.id)
   const state = structuredClone(def.initialState) as S
   const actions = def.actions as StoreActions<S>
 
   const broadcast = () => {
     for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) win.webContents.send(`${channel}:changed`, state)
+      if (!win.isDestroyed()) win.webContents.send(changed, state)
     }
   }
 
@@ -33,7 +35,7 @@ export function registerStore<TId extends string, S, A extends StoreActions<S>>(
   }
 
   ipcMain.handle(channel, (_event, method: string, payload?: { args?: unknown[] }) => {
-    if (method === '__get__') return state
+    if (method === STORE_GET) return state
     run(method, payload?.args ?? [])
     return state
   })

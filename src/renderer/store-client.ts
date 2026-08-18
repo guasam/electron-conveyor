@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { useStore } from 'zustand'
+import { channels, STORE_GET } from '../core/channels'
 import type { ConveyorStore, StoreActions, StoreActionsClient, StoreDef } from '../authoring/store'
 
 // One mirror + one bound-action map per store id, shared by all components in this window.
@@ -10,12 +11,12 @@ function getMirror(def: StoreDef<string, object, StoreActions<object>>): StoreAp
   const existing = mirrors.get(def.id)
   if (existing) return existing
 
-  const channel = `conveyor:store:${def.id}`
+  const channel = channels.store(def.id)
   const store = createStore<object>(() => structuredClone(def.initialState))
 
   // Hydrate from the source of truth, then stay in sync via broadcasts.
-  window.conveyor.invoke(channel, '__get__').then((s) => store.setState(s as object, true))
-  window.conveyor.subscribe(`${channel}:changed`, (s) => store.setState(s as object, true))
+  window.conveyor.invoke(channel, STORE_GET).then((s) => store.setState(s as object, true))
+  window.conveyor.subscribe(channels.storeChanged(def.id), (s) => store.setState(s as object, true))
 
   mirrors.set(def.id, store)
   return store
@@ -25,7 +26,7 @@ function getActions(def: StoreDef<string, object, StoreActions<object>>) {
   const existing = actionMaps.get(def.id)
   if (existing) return existing
 
-  const channel = `conveyor:store:${def.id}`
+  const channel = channels.store(def.id)
   const bound: Record<string, (...args: unknown[]) => void> = {}
   for (const name of Object.keys(def.actions)) {
     bound[name] = (...args: unknown[]) => void window.conveyor.invoke(channel, name, { args })

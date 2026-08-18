@@ -1,5 +1,7 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
+import { channels } from '../core/channels'
 import { dispatchProcedure } from '../core/dispatch'
+import { buildContext } from './context'
 import { registerStreamHandlers } from './stream'
 import type { AnyModule, AppCtxOf, BaseContext, ModuleMap, Router } from '../core/types'
 import { isDev } from './env'
@@ -37,17 +39,9 @@ export function createRouter<TModules extends ModuleMap>(
 }
 
 function registerModule(mod: AnyModule, createContext?: (base: BaseContext) => unknown): void {
-  const channel = `conveyor:${mod.id}`
-
-  ipcMain.handle(channel, async (event, method: string, input: unknown) => {
-    const base: BaseContext = {
-      event,
-      sender: event.sender,
-      window: BrowserWindow.fromWebContents(event.sender),
-    }
-    const ctx = createContext ? { ...base, ...((await createContext(base)) as object) } : base
-
-    const result = await dispatchProcedure(mod, method, input, ctx as BaseContext, isDev)
+  ipcMain.handle(channels.procedure(mod.id), async (event, method: string, input: unknown) => {
+    const ctx = await buildContext(event, createContext)
+    const result = await dispatchProcedure(mod, method, input, ctx, isDev)
     if (!result.ok && isDev) {
       console.error(`[conveyor] ${result.error.code}: ${result.error.message}`, result.error.issues ?? '')
     }
