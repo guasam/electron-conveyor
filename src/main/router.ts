@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { dispatchProcedure } from '../core/dispatch'
+import { registerStreamHandlers } from './stream'
 import type { AnyModule, AppCtxOf, BaseContext, ModuleMap, Router } from '../core/types'
 import { isDev } from './env'
 
@@ -24,9 +25,14 @@ export function createRouter<TModules extends ModuleMap>(
 ): Router<TModules> {
   const createContext = (opts[0] as { createContext?: (base: BaseContext) => unknown } | undefined)?.createContext
 
+  const byId = new Map<string, AnyModule>()
   for (const key of Object.keys(modules)) {
-    registerModule(modules[key], createContext)
+    const mod = modules[key]
+    registerModule(mod, createContext)
+    byId.set(mod.id, mod)
   }
+  // Global start/cancel handlers for every stream across these modules.
+  registerStreamHandlers(byId, createContext)
   return { modules }
 }
 

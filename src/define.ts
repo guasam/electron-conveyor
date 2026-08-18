@@ -22,6 +22,7 @@ export type {
   NextFn,
   AnyMiddleware,
   ProcedureDef,
+  StreamDef,
   EventDef,
   AnyDef,
   Module,

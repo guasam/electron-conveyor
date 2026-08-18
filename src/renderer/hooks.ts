@@ -35,12 +35,18 @@ export interface ConveyorHooks<TRouter extends Router> {
     selector: (client: ConveyorClient<TRouter>) => Subscribable<P>,
     listener: (payload: P) => void
   ): void
+  useConveyorStream<P>(
+    selector: (client: ConveyorClient<TRouter>) => AsyncIterable<P>,
+    handlers: { onData: (chunk: P) => void; onError?: (err: unknown) => void; onEnd?: () => void },
+    deps?: readonly unknown[]
+  ): void
 }
 
 // Per-hook aliases so consumers can annotate re-exported hooks with a portable, named type.
 export type ConveyorQueryHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorQuery']
 export type ConveyorMutationHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorMutation']
 export type ConveyorEventHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorEvent']
+export type ConveyorStreamHook<TRouter extends Router> = ConveyorHooks<TRouter>['useConveyorStream']
 
 /**
  * Bind the conveyor React hooks to a typed client — thin wrappers over TanStack Query and a
@@ -91,5 +97,37 @@ export function createConveyorHooks<TRouter extends Router>(client: ConveyorClie
     }, [])
   }
 
-  return { useConveyorQuery, useConveyorMutation, useConveyorEvent }
+  /** Consume a streaming procedure for the component's lifetime; unmount/`deps` change cancels it. */
+  function useConveyorStream<P>(
+    selector: (c: Client) => AsyncIterable<P>,
+    handlers: { onData: (chunk: P) => void; onError?: (err: unknown) => void; onEnd?: () => void },
+    deps: readonly unknown[] = []
+  ): void {
+    const handlersRef = useRef(handlers)
+    handlersRef.current = handlers
+
+    useEffect(() => {
+      let active = true
+      const iterator = selector(client)[Symbol.asyncIterator]()
+      void (async () => {
+        try {
+          while (active) {
+            const { value, done } = await iterator.next()
+            if (done) break
+            if (active) handlersRef.current.onData(value)
+          }
+          if (active) handlersRef.current.onEnd?.()
+        } catch (err) {
+          if (active) handlersRef.current.onError?.(err)
+        }
+      })()
+      return () => {
+        active = false
+        void iterator.return?.(undefined)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, deps)
+  }
+
+  return { useConveyorQuery, useConveyorMutation, useConveyorEvent, useConveyorStream }
 }

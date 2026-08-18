@@ -1,5 +1,5 @@
 import { validateSchema } from './standard-schema'
-import type { AnyModule, BaseContext, ConveyorResult, ProcedureDef } from './types'
+import type { AnyModule, BaseContext, ConveyorErrorPayload, ConveyorResult, ProcedureDef, StreamDef } from './types'
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -80,4 +80,46 @@ export async function dispatchProcedure(
     return { ok: true, data: parsed.value }
   }
   return { ok: true, data: result }
+}
+
+export type StreamSetup =
+  | { ok: true; stream: AsyncIterable<unknown>; output?: StreamDef['output'] }
+  | { ok: false; error: ConveyorErrorPayload }
+
+/**
+ * Pure stream setup — validates input, runs the middleware chain, and returns the resolver's async
+ * iterable (or an error envelope for setup failures). `main` pumps the iterable to the renderer and
+ * validates each chunk against `output` in dev. Runtime errors surface while pumping, not here.
+ */
+export async function resolveStream(
+  mod: AnyModule,
+  method: string,
+  input: unknown,
+  ctx: BaseContext,
+  signal: AbortSignal
+): Promise<StreamSetup> {
+  const def = mod.record[method]
+  if (!def || def.kind !== 'stream') {
+    return { ok: false, error: { code: 'UNKNOWN_PROCEDURE', message: `Unknown stream: ${mod.id}.${method}` } }
+  }
+  const s = def as StreamDef
+  const path = `${mod.id}.${method}`
+
+  let parsedInput: unknown = input
+  if (s.input) {
+    const parsed = await validateSchema(s.input, input)
+    if (parsed.issues) {
+      return { ok: false, error: { code: 'INVALID_INPUT', message: `Invalid input for ${path}`, issues: parsed.issues } }
+    }
+    parsedInput = parsed.value
+  }
+
+  try {
+    const stream = (await runChain(s.middlewares, ctx, path, (finalCtx) =>
+      s.resolver({ input: parsedInput, ctx: finalCtx, signal })
+    )) as AsyncIterable<unknown>
+    return { ok: true, stream, output: s.output }
+  } catch (err) {
+    return { ok: false, error: { code: 'HANDLER_ERROR', message: `${path}: ${message(err)}` } }
+  }
 }

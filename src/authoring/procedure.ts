@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '../core/standard-schema'
-import type { AnyMiddleware, BaseContext, Middleware, ProcedureDef } from '../core/types'
+import type { AnyMiddleware, BaseContext, Middleware, ProcedureDef, StreamDef } from '../core/types'
 
 /**
  * Fluent builder for a renderer→main procedure. `TInput` flows from `.input()`; `TCtx` is the
@@ -43,6 +43,20 @@ export class ProcedureBuilder<TInput = void, TCtx = BaseContext, TAppCtx extends
       output: this.#output,
       middlewares: this.#middlewares,
       resolver: resolver as ProcedureDef<TInput, TResult, TAppCtx>['resolver'],
+    }
+  }
+
+  /** Attach an async-generator handler. Each yielded chunk streams to the renderer; `signal` fires
+   *  when the renderer stops iterating or its window closes. `.output()` validates each chunk (dev). */
+  stream<TChunk>(
+    resolver: (opts: { input: TInput; ctx: TCtx; signal: AbortSignal }) => AsyncIterable<TChunk>
+  ): StreamDef<TInput, TChunk, TAppCtx> {
+    return {
+      kind: 'stream',
+      input: this.#input,
+      output: this.#output,
+      middlewares: this.#middlewares,
+      resolver: resolver as StreamDef<TInput, TChunk, TAppCtx>['resolver'],
     }
   }
 }

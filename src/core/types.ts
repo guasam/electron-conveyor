@@ -59,6 +59,17 @@ export interface ProcedureDef<TInput = unknown, TResult = unknown, TAppCtx exten
   readonly _appCtx?: TAppCtx
 }
 
+// A renderer→main stream: an async-generator handler whose yields are pushed as they arrive.
+// `signal` fires when the renderer stops iterating or its window closes (cooperative cancellation).
+export interface StreamDef<TInput = unknown, TChunk = unknown, TAppCtx extends object = object> {
+  kind: 'stream'
+  input?: StandardSchemaV1
+  output?: StandardSchemaV1
+  middlewares?: AnyMiddleware[]
+  resolver: (opts: { input: TInput; ctx: any; signal: AbortSignal }) => AsyncIterable<TChunk>
+  readonly _appCtx?: TAppCtx
+}
+
 export interface EventDef<TPayload = unknown> {
   kind: 'event'
   payload: StandardSchemaV1
@@ -66,7 +77,7 @@ export interface EventDef<TPayload = unknown> {
 }
 
 // `any` generics (not `unknown`) so concrete defs stay assignable despite resolver contravariance.
-export type AnyDef = ProcedureDef<any, any, any> | EventDef<any>
+export type AnyDef = ProcedureDef<any, any, any> | StreamDef<any, any, any> | EventDef<any>
 export type ModuleRecord = Record<string, AnyDef>
 
 export interface Module<
@@ -111,17 +122,35 @@ export interface ConveyorErrorPayload {
 
 export type ConveyorResult<T> = { ok: true; data: T } | { ok: false; error: ConveyorErrorPayload }
 
+// Stream transport over the two-function bridge: renderer subscribes to `conveyor:stream:${id}` and
+// invokes `conveyor:stream:start` / `:cancel`. Main pushes these messages on the per-call channel.
+export interface StreamStartRequest {
+  module: string
+  method: string
+  streamId: string
+  input: unknown
+}
+
+export type StreamMessage =
+  | { type: 'data'; value: unknown }
+  | { type: 'error'; error: ConveyorErrorPayload }
+  | { type: 'end' }
+
 /* -- Client inference ---------------------------------------------- */
 
-// Procedures → async method; events → { subscribe }.
+// Procedures → async method; streams → async-iterable factory; events → { subscribe }.
 type ClientMember<TDef> =
   TDef extends ProcedureDef<infer I, infer R, any>
     ? [I] extends [void]
       ? () => Promise<Awaited<R>>
       : (input: I) => Promise<Awaited<R>>
-    : TDef extends EventDef<infer P>
-      ? { subscribe: (listener: (payload: P) => void) => Unsubscribe }
-      : never
+    : TDef extends StreamDef<infer I, infer C, any>
+      ? [I] extends [void]
+        ? () => AsyncIterable<C>
+        : (input: I) => AsyncIterable<C>
+      : TDef extends EventDef<infer P>
+        ? { subscribe: (listener: (payload: P) => void) => Unsubscribe }
+        : never
 
 type ModuleClient<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: ClientMember<TRecord[K]>

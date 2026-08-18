@@ -6,7 +6,13 @@
 export { createConveyorClient } from './renderer/client'
 export type { ConveyorBridge } from './renderer/client'
 export { createConveyorHooks } from './renderer/hooks'
-export type { ConveyorHooks, ConveyorQueryHook, ConveyorMutationHook, ConveyorEventHook } from './renderer/hooks'
+export type {
+  ConveyorHooks,
+  ConveyorQueryHook,
+  ConveyorMutationHook,
+  ConveyorEventHook,
+  ConveyorStreamHook,
+} from './renderer/hooks'
 export { useConveyorStore, useConveyorActions } from './renderer/store-client'
 export { ConveyorError } from './core/errors'
 export type { ConveyorErrorCode, ConveyorErrorPayload } from './core/types'
