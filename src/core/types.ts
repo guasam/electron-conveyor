@@ -138,16 +138,17 @@ export type StreamMessage =
 
 /* -- Client inference ---------------------------------------------- */
 
-// Procedures → async method; streams → async-iterable factory; events → { subscribe }.
+// A member call takes no argument when its input is `void`, otherwise exactly one typed argument.
+// `[I] extends [void]` is tuple-wrapped so it tests the whole input type instead of distributing
+// over a union (a naked `I extends void` would).
+type Call<I, TReturn> = [I] extends [void] ? () => TReturn : (input: I) => TReturn
+
+// Procedure → Promise of the result; stream → AsyncIterable of the chunk; event → { subscribe }.
 type ClientMember<TDef> =
   TDef extends ProcedureDef<infer I, infer R, any>
-    ? [I] extends [void]
-      ? () => Promise<Awaited<R>>
-      : (input: I) => Promise<Awaited<R>>
+    ? Call<I, Promise<Awaited<R>>>
     : TDef extends StreamDef<infer I, infer C, any>
-      ? [I] extends [void]
-        ? () => AsyncIterable<C>
-        : (input: I) => AsyncIterable<C>
+      ? Call<I, AsyncIterable<C>>
       : TDef extends EventDef<infer P>
         ? { subscribe: (listener: (payload: P) => void) => Unsubscribe }
         : never
