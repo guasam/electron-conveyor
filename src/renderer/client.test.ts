@@ -33,6 +33,18 @@ describe('createConveyorClient', () => {
     expect(invoke).toHaveBeenCalledWith('conveyor:web', 'openUrl', 'x')
   })
 
+  it('fires a fire-and-forget procedure (no await) on the next microtask', async () => {
+    const invoke = vi.fn(async () => ({ ok: true, data: null }))
+    mockBridge(invoke as unknown as ConveyorBridge['invoke'])
+
+    const client = createConveyorClient<TestRouter>() as never as { window: { close: () => Promise<void> } }
+    client.window.close() // no await — the titlebar's usage pattern
+
+    expect(invoke).not.toHaveBeenCalled() // deferred within the synchronous tick
+    await Promise.resolve() // flush the microtask
+    expect(invoke).toHaveBeenCalledWith('conveyor:window', 'close')
+  })
+
   it('throws a ConveyorError carrying code + issues on { ok: false }', async () => {
     const invoke = vi.fn(async () => ({
       ok: false,

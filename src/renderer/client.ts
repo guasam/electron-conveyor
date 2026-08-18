@@ -24,10 +24,12 @@ let streamSeq = 0
 function makeCall(bridge: ConveyorBridge, moduleId: string, method: string, args: unknown[]): unknown {
   const channel = channels.procedure(moduleId)
 
-  // Procedure path — lazy single invoke, unwrapping the { ok } envelope.
+  // Procedure path — invoke once, unwrapping the { ok } envelope.
+  let claimed = false
   let promise: Promise<unknown> | undefined
-  const asPromise = () =>
-    (promise ??= bridge.invoke(channel, method, ...args).then((raw) => {
+  const invokeProcedure = () => {
+    claimed = true
+    return (promise ??= bridge.invoke(channel, method, ...args).then((raw) => {
       const res = raw as ConveyorResult<unknown>
       if (res && typeof res === 'object' && 'ok' in res) {
         if (res.ok) return res.data
@@ -35,12 +37,25 @@ function makeCall(bridge: ConveyorBridge, moduleId: string, method: string, args
       }
       return raw
     }))
+  }
+
+  // Procedures fire EAGERLY — a fire-and-forget `conveyor.mod.action()` (no await) still invokes.
+  // Deferred one microtask so a synchronous `for await` (stream) can claim the handle first and skip
+  // this. Fire-and-forget errors are swallowed here; an explicit await/.then still receives them.
+  queueMicrotask(() => {
+    if (claimed) return
+    void invokeProcedure().catch(() => {})
+  })
 
   return {
-    then: (onF: ((v: unknown) => unknown) | null, onR?: ((e: unknown) => unknown) | null) => asPromise().then(onF, onR),
-    catch: (onR: (e: unknown) => unknown) => asPromise().catch(onR),
-    finally: (onFin: () => void) => asPromise().finally(onFin),
-    [Symbol.asyncIterator]: () => streamIterator(bridge, moduleId, method, args),
+    then: (onF: ((v: unknown) => unknown) | null, onR?: ((e: unknown) => unknown) | null) =>
+      invokeProcedure().then(onF, onR),
+    catch: (onR: (e: unknown) => unknown) => invokeProcedure().catch(onR),
+    finally: (onFin: () => void) => invokeProcedure().finally(onFin),
+    [Symbol.asyncIterator]: () => {
+      claimed = true
+      return streamIterator(bridge, moduleId, method, args)
+    },
   }
 }
 
