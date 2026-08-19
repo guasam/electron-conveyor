@@ -1,11 +1,34 @@
 {
   "name": "electron-conveyor",
-  "version": "0.1.0",
-  "description": "Type-safe IPC and cross-window state for Electron — single source of truth per feature, end-to-end inference.",
+  "version": "0.2.0",
+  "description": "Type-safe IPC and cross-window state for Electron \u2014 single source of truth per feature, end-to-end inference.",
+  "keywords": [
+    "electron",
+    "ipc",
+    "type-safe",
+    "typescript",
+    "rpc",
+    "trpc",
+    "cross-window",
+    "state",
+    "preload",
+    "context-bridge",
+    "react",
+    "electron-conveyor",
+    "conveyor"
+  ],
   "license": "MIT",
   "author": {
     "name": "Guasam",
     "url": "https://github.com/guasam"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guasam/electron-conveyor.git"
+  },
+  "homepage": "https://github.com/guasam/electron-conveyor#readme",
+  "bugs": {
+    "url": "https://github.com/guasam/electron-conveyor/issues"
   },
   "type": "module",
   "files": [
@@ -60,9 +83,7 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write --list-different .",
     "format:check": "prettier --check .",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5",
@@ -78,6 +99,9 @@
     "react": {
       "optional": true
     },
+    "zod": {
+      "optional": true
+    },
     "zustand": {
       "optional": true
     }
@@ -91,7 +115,6 @@
     "react": "^19.2.7",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
-    "vitepress": "^1.6.3",
     "vitest": "^4.1.9",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"

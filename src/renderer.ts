@@ -1,12 +1,18 @@
 /**
- * Renderer-only entry point. Everything the renderer needs to consume the conveyor.
+ * Renderer-only entry — everything the renderer needs to consume the conveyor.
  *
  *   import { createConveyorClient, createConveyorHooks, useConveyorStore } from 'electron-conveyor/renderer'
  */
-export { createConveyorClient } from './client'
-export type { ConveyorBridge } from './client'
-export { createConveyorHooks } from './hooks'
-export type { ConveyorHooks, ConveyorQueryHook, ConveyorMutationHook, ConveyorEventHook } from './hooks'
-export { useConveyorStore, useConveyorActions } from './store-client'
-export { ConveyorError } from './errors'
-export type { ConveyorErrorCode, ConveyorErrorPayload } from './types'
+export { createConveyorClient } from './renderer/client'
+export type { ConveyorBridge } from './renderer/client'
+export { createConveyorHooks } from './renderer/hooks'
+export type {
+  ConveyorHooks,
+  ConveyorQueryHook,
+  ConveyorMutationHook,
+  ConveyorEventHook,
+  ConveyorStreamHook,
+} from './renderer/hooks'
+export { useConveyorStore, useConveyorActions } from './renderer/store-client'
+export { ConveyorError } from './core/errors'
+export type { ConveyorErrorCode, ConveyorErrorPayload } from './core/types'
