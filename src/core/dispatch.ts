@@ -71,7 +71,9 @@ export async function dispatchProcedure(
 
   let result: unknown
   try {
-    result = await runChain(proc.middlewares, ctx, path, (finalCtx) => proc.resolver({ input: inp.value, ctx: finalCtx }))
+    result = await runChain(proc.middlewares, ctx, path, (finalCtx) =>
+      proc.resolver({ input: inp.value, ctx: finalCtx })
+    )
   } catch (err) {
     return { ok: false, error: { code: 'HANDLER_ERROR', message: `${path}: ${errorMessage(err)}` } }
   }
@@ -80,7 +82,10 @@ export async function dispatchProcedure(
   if (validateOutput && proc.output) {
     const parsed = await validateSchema(proc.output, result)
     if (parsed.issues) {
-      return { ok: false, error: { code: 'INVALID_OUTPUT', message: `Invalid output for ${path}`, issues: parsed.issues } }
+      return {
+        ok: false,
+        error: { code: 'INVALID_OUTPUT', message: `Invalid output for ${path}`, issues: parsed.issues },
+      }
     }
     return { ok: true, data: parsed.value }
   }

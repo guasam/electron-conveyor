@@ -132,9 +132,7 @@ export interface StreamStartRequest {
 }
 
 export type StreamMessage =
-  | { type: 'data'; value: unknown }
-  | { type: 'error'; error: ConveyorErrorPayload }
-  | { type: 'end' }
+  { type: 'data'; value: unknown } | { type: 'error'; error: ConveyorErrorPayload } | { type: 'end' }
 
 /* -- Client inference ---------------------------------------------- */
 

@@ -11,7 +11,10 @@ export interface ConveyorApi<TAppCtx extends object> {
   procedure(): ProcedureBuilder<void, BaseContext & TAppCtx, TAppCtx>
   middleware<TAdd extends object>(mw: Middleware<BaseContext & TAppCtx, TAdd>): Middleware<BaseContext & TAppCtx, TAdd>
   event<S extends StandardSchemaV1>(payload: S): EventDef<StandardSchemaV1.InferOutput<S>>
-  defineModule<TId extends string, TRecord extends ModuleRecord>(id: TId, record: TRecord): Module<TId, TRecord, TAppCtx>
+  defineModule<TId extends string, TRecord extends ModuleRecord>(
+    id: TId,
+    record: TRecord
+  ): Module<TId, TRecord, TAppCtx>
 }
 
 /**
