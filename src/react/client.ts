@@ -2,22 +2,13 @@ import { useEffect, useRef } from 'react'
 import {
   useMutation,
   useQuery,
-  type QueryClient,
   type UseMutationOptions,
   type UseMutationResult,
   type UseQueryOptions,
   type UseQueryResult,
 } from '@tanstack/react-query'
 import { buildClientProxy, createClientCore } from '../renderer/client'
-import type {
-  Call,
-  EventDef,
-  ModuleRecord,
-  ProcedureDef,
-  Router,
-  StreamDef,
-  Unsubscribe,
-} from '../core/types'
+import type { Call, EventDef, ModuleRecord, ProcedureDef, Router, StreamDef, Unsubscribe } from '../core/types'
 
 export type QueryOpts<T> = Omit<UseQueryOptions<T, Error>, 'queryKey' | 'queryFn'>
 export type MutationOpts<TData, TVars> = Omit<UseMutationOptions<TData, Error, TVars>, 'mutationFn'>
@@ -87,9 +78,18 @@ export type ConveyorReactClient<TRouter extends Router> = {
   [M in keyof TRouter['modules']]: ReactModuleClient<TRouter['modules'][M]['record']>
 }
 
+/**
+ * The structural slice of TanStack's QueryClient that `invalidate()` needs. Structural on purpose:
+ * QueryClient carries a `#private` member, so the nominal type from a duplicate install (e.g. a
+ * `file:`/linked checkout) would not be assignable even though the object works fine.
+ */
+export interface QueryInvalidator {
+  invalidateQueries(filters: { queryKey: readonly unknown[]; exact?: boolean }): Promise<void>
+}
+
 export interface ReactClientOptions {
   /** Enables `member.invalidate()` outside of hooks. Pass the app's QueryClient instance. */
-  queryClient?: QueryClient
+  queryClient?: QueryInvalidator
 }
 
 /**

@@ -1,12 +1,5 @@
 import type { StandardSchemaV1 } from '../core/standard-schema'
-import type {
-  AnyMiddleware,
-  BaseContext,
-  Middleware,
-  ProcedureDef,
-  ProcedureKind,
-  StreamDef,
-} from '../core/types'
+import type { AnyMiddleware, BaseContext, Middleware, ProcedureDef, ProcedureKind, StreamDef } from '../core/types'
 
 /*
  * The authoring primitives: `query` (read), `command` (act), `stream` (async-generator push).

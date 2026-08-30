@@ -67,7 +67,8 @@ export function createCaller<TModules extends ModuleMap>(
 
   const call = async (mod: AnyModule, method: string, input: unknown): Promise<unknown> => {
     const def = mod.record[method]
-    if (def?.kind === 'event') throw new ConveyorError('HANDLER_ERROR', `${mod.id}.${method} is an event — emit it via createEmitter`)
+    if (def?.kind === 'event')
+      throw new ConveyorError('HANDLER_ERROR', `${mod.id}.${method} is an event — emit it via createEmitter`)
     if (def?.kind === 'stream') {
       const setup = await resolveStream(mod, method, input, ctx, new AbortController().signal)
       if (!setup.ok) throw ConveyorError.from(setup.error)

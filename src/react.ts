@@ -10,6 +10,7 @@ export type {
   ConveyorReactMember,
   ReactClientOptions,
   QueryMember,
+  QueryInvalidator,
   CommandMember,
   StreamMember,
   EventMember,

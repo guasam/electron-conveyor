@@ -61,9 +61,6 @@ export function defineStore<
   S,
   TSchemas extends StoreSchemaMap = Record<never, never>,
   A extends StoreActionsFor<S, TSchemas> = StoreActionsFor<S, TSchemas>,
->(
-  id: TId,
-  config: { state: S; schemas?: TSchemas; actions: A; persist?: boolean | string }
-): StoreDef<TId, S, A> {
+>(id: TId, config: { state: S; schemas?: TSchemas; actions: A; persist?: boolean | string }): StoreDef<TId, S, A> {
   return { id, initialState: config.state, actions: config.actions, schemas: config.schemas, persist: config.persist }
 }

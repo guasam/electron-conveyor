@@ -27,10 +27,9 @@ interface RouterConfig<TAppCtx extends object, TStores extends readonly AnyStore
   use?: ReadonlyArray<Middleware<BaseContext & TAppCtx, object>>
 }
 
-export type RouterOptions<TAppCtx extends object, TStores extends readonly AnyStoreDef[]> =
-  keyof TAppCtx extends never
-    ? RouterConfig<TAppCtx, TStores>
-    : RouterConfig<TAppCtx, TStores> & { createContext: (base: BaseContext) => TAppCtx | Promise<TAppCtx> }
+export type RouterOptions<TAppCtx extends object, TStores extends readonly AnyStoreDef[]> = keyof TAppCtx extends never
+  ? RouterConfig<TAppCtx, TStores>
+  : RouterConfig<TAppCtx, TStores> & { createContext: (base: BaseContext) => TAppCtx | Promise<TAppCtx> }
 
 /**
  * Register the app's whole IPC surface on main: every module's procedures/streams (one
