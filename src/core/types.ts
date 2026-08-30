@@ -12,7 +12,10 @@ export interface BaseContext {
   window: BrowserWindow | null
 }
 
-/* -- Middleware ---------------------------------------------------- */
+/* ---------------------------------------------------------
+ * Middleware
+ * ---------------------------------------------------------
+ */
 
 // `next()` keeps ctx; `next({ ctx })` merges an extension the handler sees typed. The returned
 // marker carries only the added-ctx type (so `.use()` can infer it); at runtime `next` returns
@@ -41,7 +44,10 @@ export type AnyMiddleware = (opts: {
   next: (opts?: { ctx?: object }) => Promise<unknown>
 }) => Promise<unknown>
 
-/* -- Definitions --------------------------------------------------- */
+/* ---------------------------------------------------------
+ * Definitions
+ * ---------------------------------------------------------
+ */
 
 /** Renderer→main request/response kinds. `query` reads, `command` acts — they dispatch
  *  identically; the split exists so the client can auto-wire `useQuery` vs `useMutation`. */
@@ -116,12 +122,18 @@ export type AppCtxOf<TModules extends ModuleMap> = UnionToIntersection<
 > &
   object // the intersection pins the empty/unknown cases back to `object`
 
-/* -- Kind manifest -------------------------------------------------- */
+/* ---------------------------------------------------------
+ * Kind manifest
+ * ---------------------------------------------------------
+ */
 
 /** What main serves on the MANIFEST channel: member kinds per module, keyed by router key. */
 export type RouterManifest = Record<string, Record<string, MemberKind>>
 
-/* -- Error transport ----------------------------------------------- */
+/* ---------------------------------------------------------
+ * Error transport
+ * ---------------------------------------------------------
+ */
 
 // Procedures return a typed envelope so real error detail survives the IPC boundary.
 
@@ -153,10 +165,12 @@ export interface StreamStartRequest {
 export type StreamMessage =
   { type: 'data'; value: unknown } | { type: 'error'; error: ConveyorErrorPayload } | { type: 'end' }
 
-/* -- Def guards ------------------------------------------------------
+/* ---------------------------------------------------------
+ * Def guards
  * Named tests for "which kind of def is this". The `any` parameters make them usable as
  * `extends` guards despite resolver-parameter contravariance (same reason AnyDef uses `any`).
- * ------------------------------------------------------------------ */
+ * ---------------------------------------------------------
+ */
 
 export type AnyQueryDef = ProcedureDef<'query', any, any, any>
 export type AnyCommandDef = ProcedureDef<'command', any, any, any>
@@ -164,10 +178,12 @@ export type AnyProcedureDef = ProcedureDef<ProcedureKind, any, any, any>
 export type AnyStreamDef = StreamDef<any, any, any>
 export type AnyEventDef = EventDef<any>
 
-/* -- Def inference helpers -------------------------------------------
+/* ---------------------------------------------------------
+ * Def inference helpers
  * Named extractors for a def's type parameters, so the member maps below (and app code) never
  * spell out `infer` chains. E.g. `InputOf<typeof files.record.save>`.
- * ------------------------------------------------------------------ */
+ * ---------------------------------------------------------
+ */
 
 /** The (validated) input a procedure or stream accepts; `void` when it takes none. */
 export type InputOf<TDef> =
@@ -186,7 +202,10 @@ export type ChunkOf<TDef> = TDef extends StreamDef<any, infer C, any> ? C : neve
 /** What an event pushes to the renderer. */
 export type PayloadOf<TDef> = TDef extends EventDef<infer P> ? P : never
 
-/* -- Client inference ---------------------------------------------- */
+/* ---------------------------------------------------------
+ * Client inference
+ * ---------------------------------------------------------
+ */
 
 // A member call takes no argument when its input is `void`, an optional argument when the input
 // schema allows `undefined`, otherwise exactly one typed argument. `[I] extends [void]` is
@@ -220,7 +239,10 @@ export type ConveyorClient<TRouter extends Router> = {
   [M in keyof TRouter['modules']]: ModuleClient<TRouter['modules'][M]['record']>
 }
 
-/* -- Emitter inference (main) -------------------------------------- */
+/* ---------------------------------------------------------
+ * Emitter inference (main)
+ * ---------------------------------------------------------
+ */
 
 type EventKeysOf<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: TRecord[K] extends AnyEventDef ? K : never
