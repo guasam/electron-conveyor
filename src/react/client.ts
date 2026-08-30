@@ -8,7 +8,20 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query'
 import { buildClientProxy, createClientCore } from '../renderer/client'
-import type { Call, EventDef, ModuleRecord, ProcedureDef, Router, StreamDef, Unsubscribe } from '../core/types'
+import type {
+  AnyCommandDef,
+  AnyEventDef,
+  AnyQueryDef,
+  AnyStreamDef,
+  Call,
+  ChunkOf,
+  EventSubscriber,
+  InputOf,
+  ModuleRecord,
+  PayloadOf,
+  ResultOf,
+  Router,
+} from '../core/types'
 
 export type QueryOpts<T> = Omit<UseQueryOptions<T, Error>, 'queryKey' | 'queryFn'>
 export type MutationOpts<TData, TVars> = Omit<UseMutationOptions<TData, Error, TVars>, 'mutationFn'>
@@ -54,21 +67,20 @@ export type StreamMember<I, C> = Call<I, AsyncIterable<C>> & {
 }
 
 /** An `event(...)` member: `subscribe` anywhere, `useEvent` for component-lifetime subscriptions. */
-export type EventMember<P> = {
-  subscribe: (listener: (payload: P) => void) => Unsubscribe
+export interface EventMember<P> extends EventSubscriber<P> {
   useEvent: (listener: (payload: P) => void) => void
 }
 
-export type ConveyorReactMember<TDef> =
-  TDef extends ProcedureDef<'query', infer I, infer R, any>
-    ? QueryMember<I, Awaited<R>>
-    : TDef extends ProcedureDef<'command', infer I, infer R, any>
-      ? CommandMember<I, Awaited<R>>
-      : TDef extends StreamDef<infer I, infer C, any>
-        ? StreamMember<I, C>
-        : TDef extends EventDef<infer P>
-          ? EventMember<P>
-          : never
+// What each kind of def becomes on the React client.
+export type ConveyorReactMember<TDef> = TDef extends AnyQueryDef
+  ? QueryMember<InputOf<TDef>, ResultOf<TDef>>
+  : TDef extends AnyCommandDef
+    ? CommandMember<InputOf<TDef>, ResultOf<TDef>>
+    : TDef extends AnyStreamDef
+      ? StreamMember<InputOf<TDef>, ChunkOf<TDef>>
+      : TDef extends AnyEventDef
+        ? EventMember<PayloadOf<TDef>>
+        : never
 
 type ReactModuleClient<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: ConveyorReactMember<TRecord[K]>

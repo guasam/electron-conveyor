@@ -153,6 +153,39 @@ export interface StreamStartRequest {
 export type StreamMessage =
   { type: 'data'; value: unknown } | { type: 'error'; error: ConveyorErrorPayload } | { type: 'end' }
 
+/* -- Def guards ------------------------------------------------------
+ * Named tests for "which kind of def is this". The `any` parameters make them usable as
+ * `extends` guards despite resolver-parameter contravariance (same reason AnyDef uses `any`).
+ * ------------------------------------------------------------------ */
+
+export type AnyQueryDef = ProcedureDef<'query', any, any, any>
+export type AnyCommandDef = ProcedureDef<'command', any, any, any>
+export type AnyProcedureDef = ProcedureDef<ProcedureKind, any, any, any>
+export type AnyStreamDef = StreamDef<any, any, any>
+export type AnyEventDef = EventDef<any>
+
+/* -- Def inference helpers -------------------------------------------
+ * Named extractors for a def's type parameters, so the member maps below (and app code) never
+ * spell out `infer` chains. E.g. `InputOf<typeof files.record.save>`.
+ * ------------------------------------------------------------------ */
+
+/** The (validated) input a procedure or stream accepts; `void` when it takes none. */
+export type InputOf<TDef> =
+  TDef extends ProcedureDef<ProcedureKind, infer I, any, any>
+    ? I
+    : TDef extends StreamDef<infer I, any, any>
+      ? I
+      : never
+
+/** What a query/command resolves to (awaited). */
+export type ResultOf<TDef> = TDef extends ProcedureDef<ProcedureKind, any, infer R, any> ? Awaited<R> : never
+
+/** What a stream yields per chunk. */
+export type ChunkOf<TDef> = TDef extends StreamDef<any, infer C, any> ? C : never
+
+/** What an event pushes to the renderer. */
+export type PayloadOf<TDef> = TDef extends EventDef<infer P> ? P : never
+
 /* -- Client inference ---------------------------------------------- */
 
 // A member call takes no argument when its input is `void`, an optional argument when the input
@@ -164,15 +197,19 @@ export type Call<I, TReturn> = [I] extends [void]
     ? (input?: I) => TReturn
     : (input: I) => TReturn
 
-// Procedure → Promise of the result; stream → AsyncIterable of the chunk; event → { subscribe }.
-export type ClientMember<TDef> =
-  TDef extends ProcedureDef<ProcedureKind, infer I, infer R, any>
-    ? Call<I, Promise<Awaited<R>>>
-    : TDef extends StreamDef<infer I, infer C, any>
-      ? Call<I, AsyncIterable<C>>
-      : TDef extends EventDef<infer P>
-        ? { subscribe: (listener: (payload: P) => void) => Unsubscribe }
-        : never
+/** An event on the plain client: subscribe/unsubscribe, nothing else. */
+export interface EventSubscriber<P> {
+  subscribe: (listener: (payload: P) => void) => Unsubscribe
+}
+
+// What each kind of def becomes on the plain renderer client.
+export type ClientMember<TDef> = TDef extends AnyProcedureDef
+  ? Call<InputOf<TDef>, Promise<ResultOf<TDef>>>
+  : TDef extends AnyStreamDef
+    ? Call<InputOf<TDef>, AsyncIterable<ChunkOf<TDef>>>
+    : TDef extends AnyEventDef
+      ? EventSubscriber<PayloadOf<TDef>>
+      : never
 
 export type ModuleClient<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: ClientMember<TRecord[K]>
@@ -185,11 +222,9 @@ export type ConveyorClient<TRouter extends Router> = {
 /* -- Emitter inference (main) -------------------------------------- */
 
 type EventKeysOf<TRecord extends ModuleRecord> = {
-  [K in keyof TRecord]: TRecord[K] extends EventDef ? K : never
+  [K in keyof TRecord]: TRecord[K] extends AnyEventDef ? K : never
 }[keyof TRecord]
 
-type EventPayloadOf<TDef> = TDef extends EventDef<infer P> ? P : never
-
 export type EventEmitters<TModule extends AnyModule> = {
-  [K in EventKeysOf<TModule['record']>]: (payload: EventPayloadOf<TModule['record'][K]>) => void
+  [K in EventKeysOf<TModule['record']>]: (payload: PayloadOf<TModule['record'][K]>) => void
 }
