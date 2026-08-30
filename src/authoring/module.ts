@@ -1,13 +1,11 @@
 import type { Module, ModuleRecord } from '../core/types'
 
 /**
- * Group procedures and events under a namespace id — the single source of truth for a feature.
- * The renderer client type is inferred from it; no hand-written API classes, no channel strings.
+ * Group queries, commands, streams, and events into a module — the single source of truth for a
+ * feature. The renderer client type is inferred from it; no hand-written API classes, no channel
+ * strings. The module's id comes from its key in `createRouter({ ... })` — declared once, there.
  * (For a typed ctx, use `initConveyor<AppContext>().defineModule`.)
  */
-export function defineModule<TId extends string, TRecord extends ModuleRecord>(
-  id: TId,
-  record: TRecord
-): Module<TId, TRecord> {
-  return { id, record }
+export function defineModule<TRecord extends ModuleRecord>(record: TRecord): Module<TRecord> {
+  return { record }
 }

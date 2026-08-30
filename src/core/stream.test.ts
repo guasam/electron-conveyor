@@ -7,6 +7,8 @@ import type { BaseContext } from './types'
 const base = { window: null, sender: {} as never, event: {} as never } as BaseContext
 const t = initConveyor()
 
+const named = <M extends { id?: string }>(mod: M): M => ((mod.id = 'm'), mod)
+
 async function collect(stream: AsyncIterable<unknown>): Promise<unknown[]> {
   const out: unknown[] = []
   for await (const chunk of stream) out.push(chunk)
@@ -15,14 +17,13 @@ async function collect(stream: AsyncIterable<unknown>): Promise<unknown[]> {
 
 describe('resolveStream', () => {
   it('yields the generator chunks in order', async () => {
-    const mod = t.defineModule('m', {
-      count: t
-        .procedure()
-        .input(z.number())
-        .stream(async function* ({ input }) {
+    const mod = named(
+      t.defineModule({
+        count: t.stream(z.number(), async function* ({ input }) {
           for (let i = 1; i <= input; i++) yield i
         }),
-    })
+      })
+    )
 
     const setup = await resolveStream(mod, 'count', 3, base, new AbortController().signal)
     expect(setup.ok).toBe(true)
@@ -30,14 +31,13 @@ describe('resolveStream', () => {
   })
 
   it('validates input before starting the stream', async () => {
-    const mod = t.defineModule('m', {
-      count: t
-        .procedure()
-        .input(z.number())
-        .stream(async function* () {
+    const mod = named(
+      t.defineModule({
+        count: t.stream(z.number(), async function* () {
           yield 1
         }),
-    })
+      })
+    )
 
     const setup = await resolveStream(mod, 'count', 'nope', base, new AbortController().signal)
     expect(setup.ok).toBe(false)
@@ -45,9 +45,11 @@ describe('resolveStream', () => {
   })
 
   it('rejects an unknown or non-stream method', async () => {
-    const mod = t.defineModule('m', {
-      notAStream: t.procedure().handle(() => 'x'),
-    })
+    const mod = named(
+      t.defineModule({
+        notAStream: t.query(() => 'x'),
+      })
+    )
     const unknown = await resolveStream(mod, 'nope', undefined, base, new AbortController().signal)
     const wrongKind = await resolveStream(mod, 'notAStream', undefined, base, new AbortController().signal)
     expect(unknown.ok).toBe(false)
@@ -55,15 +57,15 @@ describe('resolveStream', () => {
   })
 
   it('runs middleware (ctx-extension reaches the generator) and exposes the abort signal', async () => {
-    const mod = t.defineModule('m', {
-      tick: t
-        .procedure()
-        .use(({ next }) => next({ ctx: { tag: 'mw' } }))
-        .stream(async function* ({ ctx, signal }) {
-          yield (ctx as { tag: string }).tag
+    const tagged = t.stream.use(({ next }) => next({ ctx: { tag: 'mw' } }))
+    const mod = named(
+      t.defineModule({
+        tick: tagged(async function* ({ ctx, signal }) {
+          yield ctx.tag
           yield signal.aborted
         }),
-    })
+      })
+    )
 
     const setup = await resolveStream(mod, 'tick', undefined, base, new AbortController().signal)
     expect(setup.ok).toBe(true)
@@ -72,16 +74,18 @@ describe('resolveStream', () => {
 
   it('stops early when the consumer breaks (generator observes it via return)', async () => {
     let cleanedUp = false
-    const mod = t.defineModule('m', {
-      forever: t.procedure().stream(async function* () {
-        try {
-          let i = 0
-          while (true) yield i++
-        } finally {
-          cleanedUp = true
-        }
-      }),
-    })
+    const mod = named(
+      t.defineModule({
+        forever: t.stream(async function* () {
+          try {
+            let i = 0
+            while (true) yield i++
+          } finally {
+            cleanedUp = true
+          }
+        }),
+      })
+    )
 
     const setup = await resolveStream(mod, 'forever', undefined, base, new AbortController().signal)
     expect(setup.ok).toBe(true)

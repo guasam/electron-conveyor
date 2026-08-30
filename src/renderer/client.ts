@@ -1,11 +1,21 @@
 import { channels, STREAM_START, STREAM_CANCEL } from '../core/channels'
 import { ConveyorError } from '../core/errors'
-import type { ConveyorClient, ConveyorResult, Router, StreamMessage, Unsubscribe } from '../core/types'
+import type {
+  ConveyorClient,
+  ConveyorResult,
+  MemberKind,
+  Router,
+  RouterManifest,
+  StreamMessage,
+  Unsubscribe,
+} from '../core/types'
 
-/** The minimal, Zod-free surface the preload exposes across the context bridge. */
+/** The minimal, schema-free surface the preload exposes across the context bridge. */
 export interface ConveyorBridge {
   invoke: (channel: string, method: string, ...args: unknown[]) => Promise<unknown>
   subscribe: (channel: string, cb: (payload: unknown) => void) => Unsubscribe
+  /** Fetch the router's kind manifest (synchronous; called once, lazily, then cached). */
+  manifest: () => RouterManifest
 }
 
 declare global {
@@ -14,49 +24,117 @@ declare global {
   }
 }
 
-let streamSeq = 0
-
 /**
- * A single call handle that is both awaitable (procedure → `await`) and async-iterable (stream →
- * `for await`). The router type constrains which is legal per member, so only one path is ever used;
- * this lets the metadata-free Proxy serve both without a per-method registry or a preload change.
+ * The kind-aware call machinery shared by the plain client and the React client. The manifest
+ * (member kinds only — schemas and handlers never leave main) is fetched synchronously on the
+ * first call and cached, which is what lets each member return the real thing — a Promise for
+ * queries/commands, an AsyncIterable for streams — instead of a dual-purpose handle, and lets a
+ * typo'd member name fail fast with UNKNOWN_PROCEDURE right at the call site.
  */
-function makeCall(bridge: ConveyorBridge, moduleId: string, method: string, args: unknown[]): unknown {
-  const channel = channels.procedure(moduleId)
+export interface ClientCore {
+  bridge: ConveyorBridge
+  kindOf(moduleId: string, method: string): MemberKind
+  /** Dispatch by kind: query/command → Promise, stream → AsyncIterable, event → throws (use subscribe). */
+  call(moduleId: string, method: string, args: unknown[]): unknown
+  invoke(moduleId: string, method: string, args: unknown[]): Promise<unknown>
+  streamIterable(moduleId: string, method: string, args: unknown[]): AsyncIterable<unknown>
+  subscribe(moduleId: string, method: string, listener: (payload: unknown) => void): Unsubscribe
+}
 
-  // Procedure path — invoke once, unwrapping the { ok } envelope.
-  let claimed = false
-  let promise: Promise<unknown> | undefined
-  const invokeProcedure = () => {
-    claimed = true
-    return (promise ??= bridge.invoke(channel, method, ...args).then((raw) => {
-      const res = raw as ConveyorResult<unknown>
-      if (res && typeof res === 'object' && 'ok' in res) {
-        if (res.ok) return res.data
-        throw new ConveyorError(res.error)
-      }
-      return raw
-    }))
+export function createClientCore(): ClientCore {
+  const bridge = window.conveyor
+  if (!bridge) {
+    throw new Error('[conveyor] window.conveyor is missing — call exposeConveyor() in your preload script')
   }
 
-  // Procedures fire EAGERLY — a fire-and-forget `conveyor.mod.action()` (no await) still invokes.
-  // Deferred one microtask so a synchronous `for await` (stream) can claim the handle first and skip
-  // this. Fire-and-forget errors are swallowed here; an explicit await/.then still receives them.
-  queueMicrotask(() => {
-    if (claimed) return
-    void invokeProcedure().catch(() => {})
+  let manifest: RouterManifest | undefined
+  const kindOf = (moduleId: string, method: string): MemberKind => {
+    manifest ??= bridge.manifest()
+    const kind = manifest[moduleId]?.[method]
+    if (!kind) throw new ConveyorError('UNKNOWN_PROCEDURE', `Unknown conveyor member: ${moduleId}.${method}`)
+    return kind
+  }
+
+  const invoke = async (moduleId: string, method: string, args: unknown[]): Promise<unknown> => {
+    const raw = await bridge.invoke(channels.procedure(moduleId), method, ...args)
+    const res = raw as ConveyorResult<unknown>
+    if (res && typeof res === 'object' && 'ok' in res) {
+      if (res.ok) return res.data
+      throw ConveyorError.from(res.error)
+    }
+    return raw
+  }
+
+  const streamIterable = (moduleId: string, method: string, args: unknown[]): AsyncIterable<unknown> => ({
+    [Symbol.asyncIterator]: () => streamIterator(bridge, moduleId, method, args),
   })
 
-  return {
-    then: (onF: ((v: unknown) => unknown) | null, onR?: ((e: unknown) => unknown) | null) =>
-      invokeProcedure().then(onF, onR),
-    catch: (onR: (e: unknown) => unknown) => invokeProcedure().catch(onR),
-    finally: (onFin: () => void) => invokeProcedure().finally(onFin),
-    [Symbol.asyncIterator]: () => {
-      claimed = true
-      return streamIterator(bridge, moduleId, method, args)
-    },
+  const call = (moduleId: string, method: string, args: unknown[]): unknown => {
+    const kind = kindOf(moduleId, method)
+    if (kind === 'stream') return streamIterable(moduleId, method, args)
+    if (kind === 'event') {
+      throw new ConveyorError('HANDLER_ERROR', `${moduleId}.${method} is an event — use .subscribe()`)
+    }
+    return invoke(moduleId, method, args)
   }
+
+  const subscribe = (moduleId: string, method: string, listener: (payload: unknown) => void): Unsubscribe => {
+    const kind = kindOf(moduleId, method)
+    if (kind !== 'event') {
+      throw new ConveyorError('HANDLER_ERROR', `${moduleId}.${method} is a ${kind}, not an event — call it instead`)
+    }
+    return bridge.subscribe(channels.event(moduleId, method), listener)
+  }
+
+  return { bridge, kindOf, call, invoke, streamIterable, subscribe }
+}
+
+/** The lazy two-level Proxy shared by both clients: `createMember` runs once per `module.method`. */
+export function buildClientProxy<TClient extends object>(
+  createMember: (moduleId: string, method: string) => unknown
+): TClient {
+  const moduleCache = new Map<string, unknown>()
+  return new Proxy({} as TClient, {
+    get(_target, moduleId) {
+      if (typeof moduleId !== 'string') return undefined
+      let mod = moduleCache.get(moduleId)
+      if (!mod) {
+        const methodCache = new Map<string, unknown>()
+        mod = new Proxy(
+          {},
+          {
+            get(_m, method) {
+              if (typeof method !== 'string') return undefined
+              let member = methodCache.get(method)
+              if (!member) {
+                member = createMember(moduleId, method)
+                methodCache.set(method, member)
+              }
+              return member
+            },
+          }
+        )
+        moduleCache.set(moduleId, mod)
+      }
+      return mod
+    },
+  })
+}
+
+/**
+ * Build the typed renderer client — a Proxy over `window.conveyor` carrying no runtime method
+ * metadata beyond the kind manifest. Queries/commands return real Promises; streams return
+ * AsyncIterables (cancel by breaking out / `iterator.return()`); events expose `.subscribe()`.
+ *
+ * @example const conveyor = createConveyorClient<AppRouter>()
+ */
+export function createConveyorClient<TRouter extends Router>(): ConveyorClient<TRouter> {
+  const core = createClientCore()
+  return buildClientProxy<ConveyorClient<TRouter>>((moduleId, method) => {
+    const member = (...args: unknown[]) => core.call(moduleId, method, args)
+    member.subscribe = (listener: (payload: unknown) => void) => core.subscribe(moduleId, method, listener)
+    return member
+  })
 }
 
 /** Push→pull adapter: buffers stream messages from main and hands them out one `next()` at a time. */
@@ -66,7 +144,8 @@ function streamIterator(
   method: string,
   args: unknown[]
 ): AsyncIterator<unknown> {
-  const streamId = `${moduleId}.${method}#${++streamSeq}`
+  // Random ids so concurrent calls — including the same call from two windows — can never collide.
+  const streamId = `${moduleId}.${method}#${crypto.randomUUID()}`
   const channel = channels.stream(streamId)
 
   type Ev = { k: 'value'; v: unknown } | { k: 'error'; e: unknown } | { k: 'done' }
@@ -93,17 +172,17 @@ function streamIterator(
     } else {
       finished = true
       unsub()
-      deliver({ k: 'error', e: new ConveyorError(msg.error) })
+      deliver({ k: 'error', e: ConveyorError.from(msg.error) })
     }
   })
 
-  bridge.invoke(STREAM_START, streamId, { module: moduleId, method, streamId, input: args[0] })
+  void bridge.invoke(STREAM_START, streamId, { module: moduleId, method, streamId, input: args[0] })
 
   const cancel = () => {
     if (finished) return
     finished = true
     unsub()
-    bridge.invoke(STREAM_CANCEL, streamId)
+    void bridge.invoke(STREAM_CANCEL, streamId)
   }
 
   return {
@@ -126,45 +205,4 @@ function streamIterator(
       return Promise.reject(err)
     },
   }
-}
-
-/**
- * Build the typed renderer client — a Proxy over `window.conveyor` carrying no runtime method
- * metadata, so the router (schemas + handlers) stays 100% in main. Each member is a callable (also
- * carrying `.subscribe` for events); the inferred type exposes only the correct shape per member.
- */
-export function createConveyorClient<TRouter extends Router>(): ConveyorClient<TRouter> {
-  const bridge = window.conveyor
-  const moduleCache = new Map<string, unknown>()
-
-  return new Proxy({} as ConveyorClient<TRouter>, {
-    get(_target, moduleId) {
-      if (typeof moduleId !== 'string') return undefined
-      const cached = moduleCache.get(moduleId)
-      if (cached) return cached
-
-      const methodCache = new Map<string, unknown>()
-
-      const moduleProxy = new Proxy(
-        {},
-        {
-          get(_t, method) {
-            if (typeof method !== 'string') return undefined
-            const hit = methodCache.get(method)
-            if (hit) return hit
-
-            const member = (...args: unknown[]) => makeCall(bridge, moduleId, method, args)
-            member.subscribe = (listener: (payload: unknown) => void): Unsubscribe =>
-              bridge.subscribe(channels.event(moduleId, method), listener)
-
-            methodCache.set(method, member)
-            return member
-          },
-        }
-      )
-
-      moduleCache.set(moduleId, moduleProxy)
-      return moduleProxy
-    },
-  })
 }

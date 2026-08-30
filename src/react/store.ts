@@ -7,7 +7,9 @@ import type { ConveyorStore, StoreActions, StoreActionsClient, StoreDef } from '
 const mirrors = new Map<string, StoreApi<object>>()
 const actionMaps = new Map<string, Record<string, (...args: unknown[]) => void>>()
 
-function getMirror(def: StoreDef<string, object, StoreActions<object>>): StoreApi<object> {
+type AnyStoreDef = StoreDef<string, object, StoreActions<object>>
+
+function getMirror(def: AnyStoreDef): StoreApi<object> {
   const existing = mirrors.get(def.id)
   if (existing) return existing
 
@@ -15,27 +17,25 @@ function getMirror(def: StoreDef<string, object, StoreActions<object>>): StoreAp
   const store = createStore<object>(() => structuredClone(def.initialState))
 
   // Hydrate from the source of truth, then stay in sync via broadcasts.
-  window.conveyor.invoke(channel, STORE_GET).then((s) => store.setState(s as object, true))
+  void window.conveyor.invoke(channel, STORE_GET).then((s) => store.setState(s as object, true))
   window.conveyor.subscribe(channels.storeChanged(def.id), (s) => store.setState(s as object, true))
 
   mirrors.set(def.id, store)
   return store
 }
 
-function getActions(def: StoreDef<string, object, StoreActions<object>>) {
+function getActions(def: AnyStoreDef) {
   const existing = actionMaps.get(def.id)
   if (existing) return existing
 
   const channel = channels.store(def.id)
   const bound: Record<string, (...args: unknown[]) => void> = {}
   for (const name of Object.keys(def.actions)) {
-    bound[name] = (...args: unknown[]) => void window.conveyor.invoke(channel, name, { args })
+    bound[name] = (...args: unknown[]) => void window.conveyor.invoke(channel, name, { payload: args[0] })
   }
   actionMaps.set(def.id, bound)
   return bound
 }
-
-type AnyStoreDef = StoreDef<string, object, StoreActions<object>>
 
 /**
  * Subscribe to a cross-window store (source of truth in main, every window kept in sync).

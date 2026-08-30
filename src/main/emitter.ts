@@ -10,12 +10,19 @@ import { isDev } from './env'
  * sources to these, e.g. `win.on('focus', () => emit.onFocusChange(true))`.
  */
 export function createEmitter<TModule extends AnyModule>(mod: TModule, target: EmitTarget): EventEmitters<TModule> {
+  const id = mod.id
+  if (!id) {
+    throw new Error(
+      '[conveyor] createEmitter: module has no id — ids are assigned by createRouter from the router keys, ' +
+        'so create emitters after the router (an import-order problem, usually)'
+    )
+  }
   const emitters: Record<string, (payload: unknown) => void> = {}
 
   for (const key of Object.keys(mod.record)) {
     const def = mod.record[key]
     if (def.kind !== 'event') continue
-    const channel = channels.event(mod.id, key)
+    const channel = channels.event(id, key)
 
     emitters[key] = (payload: unknown) => {
       // Dev-only correctness check; non-blocking so emit stays fire-and-forget.

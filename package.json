@@ -1,7 +1,7 @@
 {
   "name": "electron-conveyor",
-  "version": "0.2.0",
-  "description": "Type-safe IPC and cross-window state for Electron \u2014 single source of truth per feature, end-to-end inference.",
+  "version": "0.4.0",
+  "description": "Type-safe IPC and cross-window state for Electron — query/command/stream/event/store primitives, end-to-end inference, hooks on the client.",
   "keywords": [
     "electron",
     "ipc",
@@ -63,6 +63,16 @@
       "require": {
         "types": "./dist/renderer.d.cts",
         "default": "./dist/renderer.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
       }
     },
     "./preload": {

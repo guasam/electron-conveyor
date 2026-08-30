@@ -21,3 +21,10 @@ export const STREAM_CANCEL = 'conveyor:stream:cancel'
 
 /** Reserved store method that returns the current state. */
 export const STORE_GET = '__get__'
+
+/**
+ * Kind manifest channel. The renderer fetches it once (synchronously, at first client call) so the
+ * client knows whether each member is a query/command (Promise), stream (AsyncIterable), or event —
+ * which is what lets calls return the real thing instead of a dual-purpose handle.
+ */
+export const MANIFEST = 'conveyor:manifest'

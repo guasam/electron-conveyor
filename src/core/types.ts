@@ -12,9 +12,6 @@ export interface BaseContext {
   window: BrowserWindow | null
 }
 
-/** @deprecated alias — prefer `BaseContext`. */
-export type HandlerContext = BaseContext
-
 /* -- Middleware ---------------------------------------------------- */
 
 // `next()` keeps ctx; `next({ ctx })` merges an extension the handler sees typed. The returned
@@ -32,7 +29,7 @@ export interface NextFn {
 export type Middleware<TCtx, TAdd extends object> = (opts: {
   ctx: TCtx
   path: string
-  type: 'procedure'
+  type: 'query' | 'command' | 'stream'
   next: NextFn
 }) => Promise<MwMarker<TAdd>>
 
@@ -40,20 +37,31 @@ export type Middleware<TCtx, TAdd extends object> = (opts: {
 export type AnyMiddleware = (opts: {
   ctx: any
   path: string
-  type: 'procedure'
+  type: 'query' | 'command' | 'stream'
   next: (opts?: { ctx?: object }) => Promise<unknown>
 }) => Promise<unknown>
 
 /* -- Definitions --------------------------------------------------- */
 
+/** Renderer→main request/response kinds. `query` reads, `command` acts — they dispatch
+ *  identically; the split exists so the client can auto-wire `useQuery` vs `useMutation`. */
+export type ProcedureKind = 'query' | 'command'
+export type MemberKind = ProcedureKind | 'stream' | 'event'
+
 // `TAppCtx` is what the app's `createContext` must supply (the `initConveyor` parameter), threaded
 // onto defs/modules so `createRouter` can demand a matching factory. Distinct from the accumulated
 // handler ctx, which middleware widens further.
 
-export interface ProcedureDef<TInput = unknown, TResult = unknown, TAppCtx extends object = object> {
-  kind: 'procedure'
+export interface ProcedureDef<
+  TKind extends ProcedureKind = ProcedureKind,
+  TInput = unknown,
+  TResult = unknown,
+  TAppCtx extends object = object,
+> {
+  kind: TKind
   input?: StandardSchemaV1
-  output?: StandardSchemaV1
+  /** Dev-only result check (trusted code — a correctness aid, not security). */
+  returns?: StandardSchemaV1
   middlewares?: AnyMiddleware[]
   resolver: (opts: { input: TInput; ctx: any }) => TResult
   readonly _appCtx?: TAppCtx
@@ -64,7 +72,8 @@ export interface ProcedureDef<TInput = unknown, TResult = unknown, TAppCtx exten
 export interface StreamDef<TInput = unknown, TChunk = unknown, TAppCtx extends object = object> {
   kind: 'stream'
   input?: StandardSchemaV1
-  output?: StandardSchemaV1
+  /** Dev-only per-chunk check. */
+  returns?: StandardSchemaV1
   middlewares?: AnyMiddleware[]
   resolver: (opts: { input: TInput; ctx: any; signal: AbortSignal }) => AsyncIterable<TChunk>
   readonly _appCtx?: TAppCtx
@@ -73,24 +82,22 @@ export interface StreamDef<TInput = unknown, TChunk = unknown, TAppCtx extends o
 export interface EventDef<TPayload = unknown> {
   kind: 'event'
   payload: StandardSchemaV1
+  /** Phantom: carries the payload type for inference. Never set at runtime. */
   readonly _payload?: TPayload
 }
 
 // `any` generics (not `unknown`) so concrete defs stay assignable despite resolver contravariance.
-export type AnyDef = ProcedureDef<any, any, any> | StreamDef<any, any, any> | EventDef<any>
+export type AnyDef = ProcedureDef<ProcedureKind, any, any, any> | StreamDef<any, any, any> | EventDef<any>
 export type ModuleRecord = Record<string, AnyDef>
 
-export interface Module<
-  TId extends string = string,
-  TRecord extends ModuleRecord = ModuleRecord,
-  TAppCtx extends object = object,
-> {
-  id: TId
+export interface Module<TRecord extends ModuleRecord = ModuleRecord, TAppCtx extends object = object> {
+  /** Assigned by `createRouter` from the router key — undefined until the module is registered. */
+  id?: string
   record: TRecord
   readonly _appCtx?: TAppCtx
 }
 
-export type AnyModule = Module<string, ModuleRecord, any>
+export type AnyModule = Module<ModuleRecord, any>
 export type ModuleMap = Record<string, AnyModule>
 
 export interface Router<TModules extends ModuleMap = ModuleMap> {
@@ -104,26 +111,38 @@ type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) exten
 
 export type AppCtxOf<TModules extends ModuleMap> = UnionToIntersection<
   {
-    [K in keyof TModules]: TModules[K] extends Module<any, any, infer C> ? C : never
+    [K in keyof TModules]: TModules[K] extends Module<any, infer C> ? C : never
   }[keyof TModules]
->
+> &
+  object // the intersection pins the empty/unknown cases back to `object`
+
+/* -- Kind manifest -------------------------------------------------- */
+
+/** What main serves on the MANIFEST channel: member kinds per module, keyed by router key. */
+export type RouterManifest = Record<string, Record<string, MemberKind>>
 
 /* -- Error transport ----------------------------------------------- */
 
 // Procedures return a typed envelope so real error detail survives the IPC boundary.
-export type ConveyorErrorCode = 'UNKNOWN_PROCEDURE' | 'INVALID_INPUT' | 'INVALID_OUTPUT' | 'HANDLER_ERROR'
+
+/** Codes conveyor itself produces. Handlers may throw `ConveyorError` with any custom code. */
+export type ReservedErrorCode = 'UNKNOWN_PROCEDURE' | 'INVALID_INPUT' | 'INVALID_OUTPUT' | 'HANDLER_ERROR'
 
 export interface ConveyorErrorPayload {
-  code: ConveyorErrorCode
+  /** A reserved code, or whatever custom code the handler threw via `ConveyorError`. */
+  code: ReservedErrorCode | (string & {})
   message: string
   /** Standard Schema issues for INVALID_INPUT / INVALID_OUTPUT. */
   issues?: unknown
 }
 
+/** The full space of codes an error can carry (reserved + app-defined). */
+export type ConveyorErrorCode = ConveyorErrorPayload['code']
+
 export type ConveyorResult<T> = { ok: true; data: T } | { ok: false; error: ConveyorErrorPayload }
 
-// Stream transport over the two-function bridge: renderer subscribes to `conveyor:stream:${id}` and
-// invokes `conveyor:stream:start` / `:cancel`. Main pushes these messages on the per-call channel.
+// Stream transport over the bridge: renderer subscribes to `conveyor:stream:${id}` and invokes
+// `conveyor:stream:start` / `:cancel`. Main pushes these messages on the per-call channel.
 export interface StreamStartRequest {
   module: string
   method: string
@@ -132,18 +151,24 @@ export interface StreamStartRequest {
 }
 
 export type StreamMessage =
-  { type: 'data'; value: unknown } | { type: 'error'; error: ConveyorErrorPayload } | { type: 'end' }
+  | { type: 'data'; value: unknown }
+  | { type: 'error'; error: ConveyorErrorPayload }
+  | { type: 'end' }
 
 /* -- Client inference ---------------------------------------------- */
 
-// A member call takes no argument when its input is `void`, otherwise exactly one typed argument.
-// `[I] extends [void]` is tuple-wrapped so it tests the whole input type instead of distributing
-// over a union (a naked `I extends void` would).
-type Call<I, TReturn> = [I] extends [void] ? () => TReturn : (input: I) => TReturn
+// A member call takes no argument when its input is `void`, an optional argument when the input
+// schema allows `undefined`, otherwise exactly one typed argument. `[I] extends [void]` is
+// tuple-wrapped so it tests the whole input type instead of distributing over a union.
+export type Call<I, TReturn> = [I] extends [void]
+  ? () => TReturn
+  : undefined extends I
+    ? (input?: I) => TReturn
+    : (input: I) => TReturn
 
 // Procedure → Promise of the result; stream → AsyncIterable of the chunk; event → { subscribe }.
-type ClientMember<TDef> =
-  TDef extends ProcedureDef<infer I, infer R, any>
+export type ClientMember<TDef> =
+  TDef extends ProcedureDef<ProcedureKind, infer I, infer R, any>
     ? Call<I, Promise<Awaited<R>>>
     : TDef extends StreamDef<infer I, infer C, any>
       ? Call<I, AsyncIterable<C>>
@@ -151,7 +176,7 @@ type ClientMember<TDef> =
         ? { subscribe: (listener: (payload: P) => void) => Unsubscribe }
         : never
 
-type ModuleClient<TRecord extends ModuleRecord> = {
+export type ModuleClient<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: ClientMember<TRecord[K]>
 }
 

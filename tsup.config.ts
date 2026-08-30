@@ -5,6 +5,7 @@ export default defineConfig({
     define: 'src/define.ts',
     main: 'src/main.ts',
     renderer: 'src/renderer.ts',
+    react: 'src/react.ts',
     preload: 'src/preload.ts',
   },
   // Dual format: renderer is bundled as ESM, but Electron's main process is CJS by default.
