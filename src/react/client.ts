@@ -9,10 +9,7 @@ import {
 } from '@tanstack/react-query'
 import { buildClientProxy, createClientCore } from '../renderer/client'
 import type {
-  AnyCommandDef,
-  AnyEventDef,
-  AnyQueryDef,
-  AnyStreamDef,
+  AnyDef,
   Call,
   ChunkOf,
   EventSubscriber,
@@ -71,16 +68,13 @@ export interface EventMember<P> extends EventSubscriber<P> {
   useEvent: (listener: (payload: P) => void) => void
 }
 
-// What each kind of def becomes on the React client.
-export type ConveyorReactMember<TDef> = TDef extends AnyQueryDef
-  ? QueryMember<InputOf<TDef>, ResultOf<TDef>>
-  : TDef extends AnyCommandDef
-    ? CommandMember<InputOf<TDef>, ResultOf<TDef>>
-    : TDef extends AnyStreamDef
-      ? StreamMember<InputOf<TDef>, ChunkOf<TDef>>
-      : TDef extends AnyEventDef
-        ? EventMember<PayloadOf<TDef>>
-        : never
+// What each kind of def becomes on the React client — a lookup on the def's literal `kind`.
+export type ConveyorReactMember<TDef extends AnyDef> = {
+  query: QueryMember<InputOf<TDef>, ResultOf<TDef>>
+  command: CommandMember<InputOf<TDef>, ResultOf<TDef>>
+  stream: StreamMember<InputOf<TDef>, ChunkOf<TDef>>
+  event: EventMember<PayloadOf<TDef>>
+}[TDef['kind']]
 
 type ReactModuleClient<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: ConveyorReactMember<TRecord[K]>

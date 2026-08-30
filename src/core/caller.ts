@@ -1,9 +1,8 @@
 import { dispatchProcedure, resolveStream } from './dispatch'
 import { ConveyorError } from './errors'
 import type {
-  AnyEventDef,
+  AnyDef,
   AnyModule,
-  AnyStreamDef,
   AppCtxOf,
   BaseContext,
   Call,
@@ -18,11 +17,12 @@ import type {
 // Same surface as the renderer client, with two in-process differences: a stream resolves async
 // (input validation + middleware run before the iterable exists), and events have no in-process
 // meaning — calling one throws at runtime, so the type maps them to `never`.
-type CallerMember<TDef> = TDef extends AnyStreamDef
-  ? Call<InputOf<TDef>, Promise<AsyncIterable<ChunkOf<TDef>>>>
-  : TDef extends AnyEventDef
-    ? never
-    : ClientMember<TDef>
+type CallerMember<TDef extends AnyDef> = {
+  query: ClientMember<TDef>
+  command: ClientMember<TDef>
+  stream: Call<InputOf<TDef>, Promise<AsyncIterable<ChunkOf<TDef>>>>
+  event: never
+}[TDef['kind']]
 
 type ModuleCaller<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: CallerMember<TRecord[K]>

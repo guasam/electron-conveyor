@@ -203,13 +203,14 @@ export interface EventSubscriber<P> {
 }
 
 // What each kind of def becomes on the plain renderer client.
-export type ClientMember<TDef> = TDef extends AnyProcedureDef
-  ? Call<InputOf<TDef>, Promise<ResultOf<TDef>>>
-  : TDef extends AnyStreamDef
-    ? Call<InputOf<TDef>, AsyncIterable<ChunkOf<TDef>>>
-    : TDef extends AnyEventDef
-      ? EventSubscriber<PayloadOf<TDef>>
-      : never
+// Dispatch is a lookup on the def's literal `kind` field — a type-level switch — so no
+// conditional chains; the extractors above do the only `infer` work.
+export type ClientMember<TDef extends AnyDef> = {
+  query: Call<InputOf<TDef>, Promise<ResultOf<TDef>>>
+  command: Call<InputOf<TDef>, Promise<ResultOf<TDef>>>
+  stream: Call<InputOf<TDef>, AsyncIterable<ChunkOf<TDef>>>
+  event: EventSubscriber<PayloadOf<TDef>>
+}[TDef['kind']]
 
 export type ModuleClient<TRecord extends ModuleRecord> = {
   [K in keyof TRecord]: ClientMember<TRecord[K]>
