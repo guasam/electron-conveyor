@@ -183,6 +183,9 @@ function streamIterator(
     finished = true
     unsub()
     void bridge.invoke(STREAM_CANCEL, streamId)
+    // A consumer may be parked in next() right now (the Stop-button pattern: one code path awaits
+    // while another calls return()) — resolve it as done or that await hangs forever.
+    for (const w of waiters.splice(0)) w.resolve({ value: undefined, done: true })
   }
 
   return {

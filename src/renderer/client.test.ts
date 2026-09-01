@@ -143,6 +143,22 @@ describe('createConveyorClient', () => {
     expect(invokedChannels()).toContain('conveyor:stream:cancel')
   })
 
+  it('resolves a pending next() as done when return() is called mid-await (Stop button pattern)', async () => {
+    // No chunks ever arrive, so next() parks a waiter; return() from another code path must
+    // resolve it or the consumer's for-await hangs forever.
+    const invoke = vi.fn(async () => undefined)
+    const bridge = mockBridge(invoke as unknown as ConveyorBridge['invoke'])
+    ;(bridge.subscribe as ReturnType<typeof vi.fn>).mockImplementation(() => () => {})
+
+    const client = createConveyorClient<TestRouter>() as never as {
+      chat: { respond: (q: string) => AsyncIterable<string> }
+    }
+    const iterator = client.chat.respond('q')[Symbol.asyncIterator]()
+    const pending = iterator.next()
+    await iterator.return?.(undefined)
+    await expect(pending).resolves.toEqual({ value: undefined, done: true })
+  })
+
   it('gives concurrent streams of the same member distinct ids', async () => {
     const startedIds: string[] = []
     const invoke = vi.fn(async (channel: string, ...args: unknown[]) => {
