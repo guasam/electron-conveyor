@@ -5,6 +5,9 @@
  *   import { createConveyorReactClient, useConveyorStore } from 'electron-conveyor/react'
  */
 export { createConveyorReactClient } from './react/client'
+export { useConveyorStore, useConveyorActions } from './react/store'
+export { ConveyorError } from './core/errors'
+
 export type {
   ConveyorReactClient,
   ConveyorReactMember,
@@ -18,7 +21,5 @@ export type {
   MutationOpts,
   StreamHandlers,
 } from './react/client'
-export { useConveyorStore, useConveyorActions } from './react/store'
-export { ConveyorError } from './core/errors'
 export type { ConveyorBridge } from './renderer/client'
 export type { ConveyorErrorCode, ConveyorErrorPayload, ReservedErrorCode, Unsubscribe } from './core/types'

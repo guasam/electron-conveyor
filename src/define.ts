@@ -6,17 +6,17 @@
  *   import { initConveyor } from 'electron-conveyor/define'                                // typed context
  */
 export { initConveyor } from './authoring/init'
-export type { ConveyorApi } from './authoring/init'
 export { defineModule } from './authoring/module'
 export { query, command, stream } from './authoring/primitives'
-export type { ProcedureFactory, StreamFactory } from './authoring/primitives'
 export { event } from './authoring/event'
 export { defineStore } from './authoring/store'
 export { ConveyorError } from './core/errors'
 export { createCaller } from './core/caller'
-export type { ConveyorCaller, CallerOptions } from './core/caller'
 export { buildManifest } from './core/manifest'
 
+export type { ConveyorApi } from './authoring/init'
+export type { ProcedureFactory, StreamFactory } from './authoring/primitives'
+export type { ConveyorCaller, CallerOptions } from './core/caller'
 export type { StandardSchemaV1 } from './core/standard-schema'
 export type {
   BaseContext,
