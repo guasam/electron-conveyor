@@ -1,4 +1,4 @@
-# Conveyor
+# Electron Conveyor
 
 Type-safe IPC + cross-window state for Electron, with **one source of truth per feature** and
 **end-to-end inference** — no hand-written client, no magic channel strings, no query keys.
@@ -47,17 +47,37 @@ schema — renderer input is the trust boundary and is always validated in main.
 ## Import map (one entry point per process)
 
 ```ts
-import { initConveyor, defineStore, ConveyorError } from 'electron-conveyor/define' // authoring (pure, any process)
-import { createRouter, createEmitter, createWindowManager, devLogger } from 'electron-conveyor/main' // main only
-import { createConveyorReactClient, useConveyorStore } from 'electron-conveyor/react' // renderer (React)
-import { createConveyorClient } from 'electron-conveyor/renderer' // renderer (no React)
-import { exposeConveyor } from 'electron-conveyor/preload' // preload only
+// authoring (pure, any process)
+import { initConveyor, defineStore, ConveyorError } from 'electron-conveyor/define'
+// main only
+import { createRouter, createEmitter, createWindowManager, devLogger } from 'electron-conveyor/main'
+// renderer (React)
+import { createConveyorReactClient, useConveyorStore, useConveyorActions } from 'electron-conveyor/react'
+// renderer (no React)
+import { createConveyorClient } from 'electron-conveyor/renderer'
+// preload only
+import { exposeConveyor } from 'electron-conveyor/preload'
 ```
 
 ## Wire it up once
 
+Six files, five steps, in this order. Only the last two are React-specific.
+
+```
+1  conveyor/init.ts     bind the primitives to your context shape (optional)
+2  conveyor/router.ts   every module, registered in one place
+3  preload.ts           the whole preload, and it never grows
+3  main.ts              create the window, and import the router
+4  conveyor/client.ts   the renderer's typed client
+5  renderer.tsx         the QueryClient provider
+```
+
+**1. Bind the primitives** — only if your handlers need app context. Without it, import
+`query`/`command`/`stream`/`event`/`middleware`/`defineModule` straight from
+`electron-conveyor/define` and skip this file.
+
 ```ts
-// conveyor/init.ts — bind the authoring primitives to your app's context shape
+// conveyor/init.ts
 import { initConveyor } from 'electron-conveyor/define'
 
 export interface AppContext {
@@ -67,14 +87,11 @@ export interface AppContext {
 export const { query, command, stream, event, middleware, defineModule } = initConveyor<AppContext>()
 ```
 
-```ts
-// preload — the whole preload; invoke + subscribe + manifest, nothing app-specific
-import { exposeConveyor } from 'electron-conveyor/preload'
-exposeConveyor()
-```
+**2. Register the surface.** `createRouter` calls `ipcMain.handle` as it runs, so this file
+registers your IPC on import — step 3 is what makes that happen.
 
 ```ts
-// main — conveyor/router.ts: the app's whole IPC surface, registered in one place
+// conveyor/router.ts
 export const router = createRouter(
   { system, window: windowModule }, // module ids come from these keys
   {
@@ -86,14 +103,53 @@ export const router = createRouter(
 export type AppRouter = typeof router // ← the only thing the renderer imports
 ```
 
+**3. Point the window at the preload, and import the router** before any window opens.
+
 ```ts
-// renderer — conveyor/client.ts
+// preload.ts — the whole preload: invoke + subscribe + manifest, nothing app-specific.
+// Exposes `window.conveyor`. It never changes as your API grows.
+import { exposeConveyor } from 'electron-conveyor/preload'
+exposeConveyor()
+```
+
+```ts
+// main.ts
+import { app, BrowserWindow } from 'electron'
+import './conveyor/router' // registers every handler — without this, calls find nothing
+
+app.whenReady().then(() => {
+  new BrowserWindow({
+    webPreferences: { preload: join(__dirname, '../preload/preload.js'), sandbox: true },
+  })
+})
+```
+
+**4. Build the client** from the router type alone.
+
+```ts
+// conveyor/client.ts
 import { QueryClient } from '@tanstack/react-query'
 import { createConveyorReactClient } from 'electron-conveyor/react'
 import type { AppRouter } from './router'
 
 export const queryClient = new QueryClient()
 export const conveyor = createConveyorReactClient<AppRouter>({ queryClient })
+```
+
+**5. Provide the QueryClient.** The hooks are TanStack Query underneath, so they need its provider
+above them — the same instance you handed to `createConveyorReactClient`, which is what makes
+`conveyor.m.f.invalidate()` work outside of React.
+
+```tsx
+// renderer.tsx
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './conveyor/client'
+
+createRoot(document.getElementById('root')!).render(
+  <QueryClientProvider client={queryClient}>
+    <App />
+  </QueryClientProvider>
+)
 ```
 
 The renderer imports only `type AppRouter` — schemas and handlers never leave main. At runtime the
@@ -238,21 +294,16 @@ await expect(caller.account.delete()).rejects.toMatchObject({ code: 'UNAUTHORIZE
   sandboxed preload's `require` cannot resolve node_modules).
 - Input schemas are security; `returns` schemas are a dev-only correctness aid.
 
-## Migrating from 0.3 (the v2 API)
+## When something is wrong
 
-| v2                                             | v3                                             |
-| ---------------------------------------------- | ---------------------------------------------- |
-| `procedure().input(s).handle(fn)`              | `query(s, fn)` or `command(s, fn)`             |
-| `procedure().handle(fn)`                       | `query(fn)` / `command(fn)`                    |
-| `procedure().output(s)`                        | drop it, or `query({ returns: s }, fn)`        |
-| `procedure().use(mw).handle(fn)`               | `const base = query.use(mw)` → `base(fn)`      |
-| `procedure().input(s).stream(gen)`             | `stream(s, gen)`                               |
-| `defineModule('id', {...})`                    | `defineModule({...})` — id = router key        |
-| `registerStore(def)` + separate call           | `createRouter(mods, { stores: [def] })`        |
-| `createConveyorClient` + `createConveyorHooks` | `createConveyorReactClient` (hooks on members) |
-| `useConveyorQuery(['key'], (c) => c.m.f())`    | `conveyor.m.f.useQuery()`                      |
-| `useConveyorEvent((c) => c.m.e, cb)`           | `conveyor.m.e.useEvent(cb)`                    |
-| `useConveyorStore` from `/renderer`            | from `/react`                                  |
+| Symptom                                                      | Cause                                                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `No QueryClient set, use QueryClientProvider to set one`     | Step 5 is missing, or the provider holds a different instance than the one passed to `createConveyorReactClient`    |
+| `UNKNOWN_PROCEDURE` on a member you can see in the router    | The router was never imported in main (step 3), so nothing registered                                               |
+| `window.conveyor is undefined`                               | The window has no `preload`, or the preload threw before `exposeConveyor()`                                         |
+| The preload throws `Cannot find module 'electron-conveyor'`  | A sandboxed preload cannot resolve `node_modules` — bundle conveyor into the preload file                           |
+| `INVALID_INPUT` with `issues` on a call you expected to pass | The input schema rejected it; `err.issues` carries the Standard Schema failures                                     |
+| A store action throws at registration                        | An action that takes a payload has no entry in `schemas` — payloads crossing from the renderer are always validated |
 
 ## License
 
