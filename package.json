@@ -1,6 +1,6 @@
 {
   "name": "electron-conveyor",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Type-safe IPC and cross-window state for Electron — query/command/stream/event/store primitives, end-to-end inference, hooks on the client.",
   "keywords": [
     "electron",
